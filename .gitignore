@@ -21,7 +21,7 @@ clip/
 *.db
 *.db-wal
 *.db-shm
-!db/vidme.template.sqlite
+!backend/db/vidme.template.sqlite
 
 # System & Application Logs
 *.log

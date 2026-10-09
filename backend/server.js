@@ -17,7 +17,7 @@ const ORIGINAL = path.join(STORAGE_PATH, 'original');
 const TRANSCODED = path.join(STORAGE_PATH, 'transcoded');
 const THUMBNAILS = path.join(STORAGE_PATH, 'thumbnails');
 const STAGING = path.join(STORAGE_PATH, 'staging');
-const FRONTEND = path.join(__dirname, 'frontend');
+const FRONTEND = fs.existsSync(path.join(__dirname, '../frontend')) ? path.join(__dirname, '../frontend') : path.join(__dirname, 'frontend');
 const WEBDAV_INBOX = path.join(STORAGE_PATH, 'webdav-inbox');
 for (const dir of [ORIGINAL, TRANSCODED, THUMBNAILS, STAGING, WEBDAV_INBOX]) fs.mkdirSync(dir, { recursive: true });
 // -- TUS (ESM-only @tus/* loaded via dynamic import; CJS server.js cannot require them) --

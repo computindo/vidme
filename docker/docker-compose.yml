@@ -1,6 +1,9 @@
 services:
   vidme:
     image: vidme:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
     container_name: vidme
     environment:
       TZ: Asia/Jakarta
@@ -14,10 +17,10 @@ services:
     volumes:
       - /mnt/Storage1/Docker/vidme:/storage
       - /mnt/Storage1/Docker/nextcloud-data/userdata/naufalzimt/files/sementara:/import/sementara:ro
-      - /opt/stacks/vidme/server.js:/app/server.js:ro
-      - /opt/stacks/vidme/logger.js:/app/logger.js:ro
-      - /opt/stacks/vidme/frontend:/app/frontend:ro
-      - /opt/stacks/vidme/db:/app/db:ro
+      - ../backend/server.js:/app/backend/server.js:ro
+      - ../backend/logger.js:/app/backend/logger.js:ro
+      - ../frontend:/app/frontend:ro
+      - ../backend/db:/app/backend/db:ro
       - /etc/localtime:/etc/localtime:ro
       - /usr/share/zoneinfo:/usr/share/zoneinfo:ro
     restart: unless-stopped

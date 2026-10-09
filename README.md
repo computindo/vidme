@@ -4,6 +4,43 @@ Self-hosted video streaming, cataloging, and automated processing service built 
 
 ---
 
+## 📁 Project Structure
+
+```text
+vidme/
+├── backend/                      # Server application & processing pipeline
+│   ├── db/
+│   │   ├── schema.sql            # Database schema DDL
+│   │   ├── sqlite.js             # Database connector & migrations
+│   │   └── vidme.template.sqlite # Pre-initialized empty SQLite template
+│   ├── backfill.mjs              # Metadata batch processor
+│   ├── import.js                 # Media import utility
+│   ├── logger.js                 # Custom logging engine
+│   ├── reprobe.js                # Video metadata reprobing
+│   └── server.js                 # Express monolith (TUS + FFmpeg)
+│
+├── frontend/                     # SPA Web Interface (v2.9.1)
+│   ├── index.html                # Main SPA shell (Carousel, Grid, Paging)
+│   ├── input.css                 # Tailwind input styles
+│   ├── manifest.json             # PWA metadata
+│   ├── material-symbols.woff2    # Icons font asset
+│   ├── player.html               # Legacy fallback player
+│   ├── service-worker.js         # TUS upload client & cache engine
+│   └── tailwind.css              # Compiled Tailwind styles
+│
+├── docker/                       # Container configuration
+│   ├── Dockerfile                # Production Alpine Node+FFmpeg image
+│   ├── docker-compose.yml        # Service stack deployment
+│   └── .dockerignore             # Docker build ignore rules
+│
+├── .gitignore                    # Git ignore rules
+├── package.json                  # Root npm project definition
+├── package-lock.json             # Dependency lockfile
+└── README.md                     # Documentation
+```
+
+---
+
 ## 🌟 Key Features
 
 - **Modern SPA Frontend (v2.9.1):**
@@ -26,73 +63,20 @@ Self-hosted video streaming, cataloging, and automated processing service built 
 - **SQLite Database Architecture:**
   - Fast, self-contained embedded database using `better-sqlite3`.
   - WAL (Write-Ahead Logging) enabled with `busy_timeout` handling for concurrent reads/writes.
-  - Automatic migration on startup (`db/sqlite.js`).
-  - Clean schema template provided in `db/schema.sql` and `db/vidme.template.sqlite`.
+  - Automatic migration on startup (`backend/db/sqlite.js`).
+  - Clean schema template provided in `backend/db/schema.sql` and `backend/db/vidme.template.sqlite`.
 
 - **WebDAV Ingestion:**
   - Integrated WebDAV server (`/webdav/*`) with Basic Auth for automated uploads and batch imports.
 
 ---
 
-## 🏗️ Architecture & Storage Layout
+## 🚀 Deployment via Docker Compose
 
-| Container Path | Host Mode | Description |
-|---|---|---|
-| `/storage` | `rw` | Persistent volume for `vidme.sqlite`, `transcoded/`, `storyboard/`, `clip/` |
-| `/import/sementara` | `ro` | Optional read-only import mount (e.g. Nextcloud inbox) |
-| `/app/server.js` | `ro` | Express server backend |
-| `/app/frontend` | `ro` | Client SPA files (HTML, CSS, Service Worker) |
-| `/app/db` | `ro` | SQLite database connectors & schema template |
+Run from project root:
 
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-- Docker & Docker Compose
-- Port `4100` available on host
-
-### Deployment via Docker Compose
-
-```yaml
-services:
-  vidme:
-    image: vidme:latest
-    build: .
-    container_name: vidme
-    environment:
-      TZ: Asia/Jakarta
-      STORAGE_PATH: /storage
-      PORT: 4100
-      NODE_ENV: production
-      WEBDAV_USER: vidme
-      WEBDAV_PASS: secretpassword
-    ports:
-      - 4100:4100
-    volumes:
-      - ./storage:/storage
-      - ./server.js:/app/server.js:ro
-      - ./logger.js:/app/logger.js:ro
-      - ./frontend:/app/frontend:ro
-      - ./db:/app/db:ro
-      - /etc/localtime:/etc/localtime:ro
-    restart: unless-stopped
-```
-
-### Build & Run
 ```bash
-docker compose build
-docker compose up -d
+docker compose -f docker/docker-compose.yml up -d --build
 ```
 
 Access the web interface at `http://localhost:4100`.
-
----
-
-## ⚙️ Environment Variables
-
-- `PORT` (default: `4100`): Port to bind HTTP service.
-- `STORAGE_PATH` (default: `/storage`): Base directory for database and video artifacts.
-- `NODE_ENV` (default: `production`): Node.js environment mode.
-- `WEBDAV_USER`: Username for WebDAV authentication.
-- `WEBDAV_PASS`: Password for WebDAV authentication.

@@ -7,8 +7,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm install --omit=dev
 
-COPY server.js import.js logger.js ./
-COPY db/ ./db/
+COPY backend/ ./backend/
 COPY frontend/ ./frontend/
 
 ENV PORT=4100
@@ -17,4 +16,4 @@ ENV NODE_ENV=production
 
 EXPOSE 4100
 
-CMD ["node", "server.js"]
+CMD ["node", "backend/server.js"]
