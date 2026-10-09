@@ -1,0 +1,747 @@
+<!doctype html>
+<html lang="en" class="bg-[#0b1326] text-slate-100">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>VidMe Player</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/navidrome.svg">
+  <link rel="preload" href="/material-symbols.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/tailwind.css">
+  
+  <style>
+    @font-face{font-family:"Material Symbols Outlined";font-style:normal;font-weight:400;src:url(/material-symbols.woff2) format("woff2");font-display:block}.material-symbols-outlined{font-size:22px;line-height:1;font-family:"Material Symbols Outlined";font-weight:normal;font-style:normal;letter-spacing:normal;text-transform:none;display:inline-block;white-space:nowrap;-webkit-font-feature-settings:"liga";-webkit-font-smoothing:antialiased}
+    /* Skip flash */
+    .skip-flash {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      background: rgba(0,0,0,0.55); border-radius: 9999px;
+      padding: 10px 18px; font-size: 14px; font-weight: 600;
+      opacity: 0; transition: opacity 0.15s;
+      color: #fff; white-space: nowrap;
+      pointer-events: none;
+      user-select: none;
+      z-index: 25;
+    }
+    .skip-flash.show { opacity: 1; }
+    /* Tap zones + center tap: no text selection, no tap highlight */
+    #tap-left, #tap-right, #center-tap {
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+    }
+    /* Play icon fade (opacity only, never visibility:hidden) */
+    #play-icon {
+      transition: opacity 0.2s;
+    }
+    /* Controls overlay */
+    #controls-overlay {
+      transition: opacity 0.25s;
+      pointer-events: none;
+    }
+    #controls-overlay.hidden-ctrl {
+      opacity: 0;
+    }
+    #controls-overlay input,
+    #controls-overlay button {
+      pointer-events: auto;
+    }
+    /* Fullscreen: center + fill */
+    #player-wrap:-webkit-full-screen { width:100vw; height:100vh; display:flex; align-items:center; justify-content:center; }
+    #player-wrap:fullscreen { width:100vw; height:100vh; display:flex; align-items:center; justify-content:center; }
+    #player-wrap:-webkit-full-screen video { width:100%; height:100%; object-fit:contain; }
+    #player-wrap:fullscreen video { width:100%; height:100%; object-fit:contain; }
+  /* Buffering spinner */
+  .vid-spinner svg { transform-origin:center; animation:rotate4 2s linear infinite; }
+  .vid-spinner circle { fill:none; stroke:hsl(214,97%,59%); stroke-width:2; stroke-dasharray:1,200; stroke-dashoffset:0; stroke-linecap:round; animation:dash4 1.5s ease-in-out infinite; }
+  @keyframes rotate4 { 100%{ transform:rotate(360deg); } }
+  @keyframes dash4 { 0%{stroke-dasharray:1,200;stroke-dashoffset:0} 50%{stroke-dasharray:90,200;stroke-dashoffset:-35px} 100%{stroke-dashoffset:-125px} }
+
+    /* Upload UI (mirrored from index.html) */
+    #toastContainer { position:fixed; bottom:80px; right:16px; z-index:9999; display:flex; flex-direction:column; gap:8px; pointer-events:none; }
+    .toast { display:flex; align-items:center; gap:10px; padding:10px 16px; border-radius:12px; font-size:13px; font-weight:500; opacity:0; transform:translateY(8px); transition:all .25s; pointer-events:auto; max-width:320px; }
+    .toast.show { opacity:1; transform:translateY(0); }
+    .toast.success { background:#1e3a2f; border:1px solid #22c55e44; color:#86efac; }
+    .toast.error   { background:#3a1e1e; border:1px solid #ef444444; color:#fca5a5; }
+    .toast.info    { background:#1e2a3a; border:1px solid #6366f144; color:#a5b4fc; }
+    .vidme-loader { display:block; width:20px; height:20px; position:relative; flex-shrink:0; }
+    .vidme-loader:before, .vidme-loader:after { content:""; position:absolute; left:50%; bottom:0; width:12px; height:12px; border-radius:50%; background:#7dd3fc; transform:translate(-50%,0%) scale(1); animation:vidme_push 2s infinite linear; }
+    .vidme-loader:after { animation-delay:1s; }
+    @keyframes vidme_push { 0%,50%{ transform:translate(-50%,0%) scale(1); } 100%{ transform:translate(-50%,-100%) scale(0); } }
+    .vidme-bar-bg { --h:8px; display:flex; align-items:center; box-sizing:border-box; padding:3px; width:100%; height:var(--h); background-color:#0f1a2a; box-shadow:#0c0c0c -2px 2px 4px 0px inset; border-radius:calc(var(--h)/2); overflow:hidden; }
+    .vidme-bar { position:relative; display:flex; align-items:center; --h:6px; height:var(--h); width:0%; background:linear-gradient(0deg,rgba(14,165,233,1) 0%,rgba(125,211,252,1) 100%); border-radius:calc(var(--h)/2); transition:width 0.2s; overflow:hidden; }
+    .vidme-bar-stripes { position:absolute; display:flex; align-items:center; gap:18px; }
+    .vidme-bar-stripe { background:linear-gradient(-45deg,rgba(255,255,255,1) 0%,rgba(255,255,255,0) 70%); width:10px; height:45px; opacity:0.3; rotate:45deg; }
+  </style>
+</head>
+<body class="min-h-screen bg-[#0b1326] font-body">
+  <header class="flex items-center gap-4 border-b border-slate-800 px-5 py-4 md:px-10">
+    <a href="/" class="flex items-center gap-2 font-heading text-xl font-bold">
+      <span class="material-symbols-outlined text-indigo-400">play_circle</span>VidMe
+    </a>
+    <a href="/" id="btn-goback" class="ml-auto flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-300 hover:bg-slate-800">
+      <span class="material-symbols-outlined">arrow_back</span>Back
+    </a>
+  </header>
+  <main class="mx-auto max-w-6xl px-4 py-6 md:px-8">
+    <!-- Video container: shrink-wrap -->
+    <div class="relative overflow-hidden rounded-2xl bg-black" id="player-wrap" style="width:100%;height:80vh;border:none;outline:none;visibility:hidden;background:#000">
+      <!-- Double-tap zones (mobile skip) — left/right 1/3 -->
+      <div id="tap-left"  class="absolute top-0 left-0 z-10" style="height:100%;width:calc(33.333% + 1px)"></div>
+      <div id="tap-right" class="absolute top-0 right-0 z-10" style="height:100%;width:calc(33.333% + 1px)"></div>
+      <!-- Center tap: play/pause — covers middle 1/3, always in DOM -->
+      <button id="center-tap" class="absolute top-0 left-1/3 z-20 w-1/3 border-0 p-0 bg-transparent" style="height:100%">
+        <div id="play-icon" class="flex items-center justify-center w-full h-full">
+          <div class="rounded-full bg-black/60 p-4 pointer-events-none">
+            <span id="play-icon-symbol" class="material-symbols-outlined text-white" style="font-size:48px">play_arrow</span>
+          </div>
+        </div>
+      </button>
+      <!-- Skip flash indicators -->
+      <div id="flash-left"  class="skip-flash" style="left:10%">-5s</div>
+      <div id="flash-right" class="skip-flash" style="right:10%">+5s</div>
+      <!-- Video -->
+      <video id="video" preload="metadata" playsinline muted style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;object-position:center;background:#000"></video>
+      <div id="vid-loader" style="display:none;position:absolute;inset:0;z-index:25;pointer-events:none;display:flex;align-items:center;justify-content:center;background:transparent">
+        <div style="border-radius:9999px;background:rgba(0,0,0,0.6);padding:16px;display:flex;align-items:center;justify-content:center">
+          <div class="vid-spinner">
+            <svg viewBox="25 25 50 50" style="width:48px;height:48px">
+              <circle r="20" cy="50" cx="50"></circle>
+            </svg>
+          </div>
+        </div>
+      </div>
+      <!-- Controls overlay -->
+      <div id="controls-overlay" class="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/90 to-transparent p-4 pt-16">
+        <input id="seek" type="range" min="0" value="0" class="mb-3 h-1 w-full cursor-pointer accent-indigo-400">
+        <div class="flex items-center gap-3">
+          <button id="btn-play" aria-label="Play/Pause">
+            <span class="material-symbols-outlined">play_arrow</span>
+          </button>
+          <button id="btn-back" aria-label="Back 5s" title="Back 5s">
+            <span class="material-symbols-outlined">replay_5</span>
+          </button>
+          <button id="btn-fwd" aria-label="Forward 5s" title="Forward 5s">
+            <span class="material-symbols-outlined">forward_5</span>
+          </button>
+          <span id="time" class="text-xs">0:00 / 0:00</span>
+          <input id="volume" class="ml-auto w-20 accent-indigo-400" type="range" min="0" max="1" step=".05" value="1" aria-label="Volume">
+          <button id="btn-full" aria-label="Fullscreen">
+            <span class="material-symbols-outlined">fullscreen</span>
+          </button>
+        </div>
+      </div>
+    </div>
+    <!-- Info section -->
+    <section class="py-6">
+      <div class="flex items-center gap-2 group/title">
+        <h1 id="title" class="font-heading text-2xl font-bold" style="word-break: break-word; overflow-wrap: anywhere;">Loading…</h1>
+        <button id="btn-edit-title" class="rounded p-1 text-slate-500 hover:text-indigo-300 opacity-0 group-hover/title:opacity-100 transition" title="Edit title">
+          <span class="material-symbols-outlined" style="font-size:18px">edit</span>
+        </button>
+      </div>
+      <input id="title-input" class="hidden w-full rounded-lg border border-indigo-400 bg-[#171f33] px-3 py-2 font-heading text-2xl font-bold outline-none mt-1" type="text">
+      <p id="date" class="mt-2 text-sm text-slate-500"></p>
+      <div class="mt-5 flex flex-wrap items-center gap-3">
+        <button id="btn-loop" class="pill rounded-full border border-slate-700 px-4 py-2 text-sm">
+          <span class="material-symbols-outlined align-middle">repeat</span> Loop
+        </button>
+        <button id="btn-pin" class="pill rounded-full border border-slate-700 px-4 py-2 text-sm">
+          <span class="material-symbols-outlined align-middle">push_pin</span> Pin
+        </button>
+        <a id="btn-download" class="pill rounded-full border border-slate-700 px-4 py-2 text-sm" download>
+          <span class="material-symbols-outlined align-middle">download</span> Download
+        </a>
+        <select id="resolution" class="rounded-full border border-slate-700 bg-[#171f33] px-4 py-2 text-sm outline-none"></select>
+      </div>
+    </section>
+  </main>
+<!-- Toast container -->
+  <div id="toastContainer"></div>
+
+  <!-- Bottom nav mobile (upload button + badge) -->
+  <nav id="bottomNav" class="fixed inset-x-0 bottom-0 z-40 flex justify-around border-t border-slate-800 bg-[#10182b] p-3 lg:hidden">
+    <a href="/" class="flex flex-col items-center gap-1 text-xs text-indigo-300"><span class="material-symbols-outlined">home</span>Home</a>
+    <button onclick="toggleUploadCenter()" class="relative flex flex-col items-center gap-1 text-xs text-slate-400"><span class="material-symbols-outlined">upload</span>Upload<span id="uploadBadge" class="hidden absolute -top-1 right-1 min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1">0</span></button>
+  </nav>
+
+  <!-- Upload Center drawer (mobile + desktop) -->
+  <div id="uploadCenter" class="fixed inset-x-0 bottom-0 z-50 hidden flex-col rounded-t-2xl border border-slate-700 bg-[#10182b] shadow-2xl lg:left-auto lg:right-4 lg:bottom-4 lg:w-[380px] lg:rounded-2xl" style="max-height:70vh;transform:translateY(100%);transition:transform .3s ease-out">
+    <div class="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+      <div class="flex items-center gap-2">
+        <h2 class="font-heading text-lg font-bold">Upload Center</h2>
+        <span id="ucActiveBadge" class="rounded-full bg-indigo-500 px-2 py-0.5 text-xs font-semibold text-white">0</span>
+      </div>
+      <button onclick="toggleUploadCenter()" class="text-slate-400"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div id="uploadCenterBody" class="scrollbar flex-1 overflow-y-auto px-4 py-3"></div>
+    <div class="border-t border-slate-800 p-4">
+      <button onclick="toggleUploadCenter();setTimeout(openModal,350)" class="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-500 py-3 font-semibold hover:bg-indigo-400"><span class="material-symbols-outlined">add</span>New Upload</button>
+    </div>
+  </div>
+
+  <!-- Upload form modal -->
+  <div id="modal" class="fixed inset-0 z-[60] hidden" style="background:rgba(0,0,0,0.6)">
+    <div id="uploadForm" class="absolute rounded-2xl border border-slate-700 bg-[#10182b] p-6 shadow-2xl" style="width:90%;max-width:440px;top:50%;left:50%;transform:translate(-50%,-50%)">
+      <div id="modalHeader" class="mb-4 flex items-center justify-between cursor-grab">
+        <h2 class="font-heading text-lg font-bold">Upload Video</h2>
+        <button onclick="closeModal()" class="text-slate-400"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <form id="uploadFormEl" class="space-y-4">
+        <div>
+          <label class="mb-1 block text-xs font-medium text-slate-400">Video File</label>
+          <div id="drop" class="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-600 p-6 text-center transition hover:border-indigo-400">
+            <span class="material-symbols-outlined mb-2 text-slate-500">cloud_upload</span>
+            <span id="fileName" class="text-sm text-slate-400">Drop a video here or click to browse</span>
+            <input id="file" type="file" accept="video/*" class="hidden" />
+          </div>
+        </div>
+        <div>
+          <label class="mb-1 block text-xs font-medium text-slate-400">Title</label>
+          <input id="titleInput" type="text" placeholder="Video title (optional)" class="w-full rounded-lg border border-slate-700 bg-[#171f33] px-3 py-2 text-sm outline-none focus:border-indigo-400" />
+        </div>
+        <div>
+          <label class="mb-1 block text-xs font-medium text-slate-400">Folder</label>
+          <select id="folderSelect" class="w-full rounded-lg border border-slate-700 bg-[#171f33] px-3 py-2 text-sm outline-none focus:border-indigo-400">
+            <option value="">No folder</option>
+          </select>
+        </div>
+        <button type="submit" class="w-full rounded-xl bg-indigo-500 py-3 font-semibold hover:bg-indigo-400">Start Upload</button>
+      </form>
+    </div>
+  </div>
+
+<script>
+const $ = s => document.querySelector(s);
+const vid = document.getElementById("video");
+const vidLoader = document.getElementById('vid-loader');
+function showLoader() { vidLoader.style.display = 'flex'; playIcon.style.display = 'none'; }
+function hideLoader() { vidLoader.style.display = 'none'; playIcon.style.display = ''; }
+vid.addEventListener('waiting',  showLoader);
+vid.addEventListener('seeking',  showLoader);
+vid.addEventListener('canplay',  hideLoader);
+vid.addEventListener('playing',  hideLoader);
+vid.addEventListener('ended',    hideLoader);
+const wrap = document.getElementById("player-wrap");
+const overlay = document.getElementById("controls-overlay");
+const centerTap = document.getElementById("center-tap");
+const playIcon = document.getElementById("play-icon");
+const playIconSymbol = document.getElementById("play-icon-symbol");
+let metadata, controlsTimer;
+let lastTapLeft = 0, lastTapRight = 0;
+let touchHandled = false;
+const _pathParts = location.pathname.split('/').filter(Boolean);
+// Back button: prefer real history (keeps folder scroll state); fallback = folder slug from URL
+(() => {
+  const _parts = location.pathname.split('/').filter(Boolean);
+  const _vi = _parts.indexOf('v');
+  const _parent = _vi > 0 ? '/' + _parts.slice(0, _vi).join('/') + '/' : '/';
+  const _back = document.getElementById('btn-goback');
+  _back.href = _parent;
+  _back.onclick = e => {
+    e.preventDefault();
+    if (document.referrer) { try { if (new URL(document.referrer).origin === location.origin) { history.back(); return; } } catch (err) {} }
+    location.href = _parent;
+  };
+})();
+const id = (_pathParts.length >= 3 && _pathParts[1] === 'v')
+    ? _pathParts[2]
+    : (_pathParts.length >= 1 && _pathParts[0] === 'v')
+    ? _pathParts[1]
+    : new URLSearchParams(location.search).get("id");
+function fmt(n) { const h = Math.floor(n/3600); const m = Math.floor((n%3600)/60); const s = Math.floor(n%60); return h ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` : `${m}:${String(s).padStart(2,'0')}`; }
+
+// ── Adaptive sizing (no-op: all handled by CSS object-fit) ──
+function adaptSize() {}
+vid.addEventListener("loadedmetadata", adaptSize);
+
+
+// ── Controls visibility ──
+let mouseInside = false;
+function showControls() {
+  overlay.classList.remove("hidden-ctrl");
+  clearTimeout(controlsTimer);
+}
+function scheduleHide(ms) {
+  clearTimeout(controlsTimer);
+  controlsTimer = setTimeout(() => {
+    if (!mouseInside) overlay.classList.add("hidden-ctrl");
+  }, ms);
+}
+
+// Desktop hover
+wrap.addEventListener("mouseenter", () => { mouseInside = true; showControls(); });
+wrap.addEventListener("mouseleave", () => { mouseInside = false; if (!vid.paused) scheduleHide(200); });
+wrap.addEventListener("mousemove", () => { showControls(); if (!vid.paused) scheduleHide(3000); });
+
+// ── Play/Pause (core toggle) ──
+function playWithSound() {
+  vid.muted = false;
+  document.getElementById("volume").value = vid.volume || 1;
+  vid.paused ? vid.play().catch(()=>{}) : vid.pause();
+}
+
+// ── Center tap button: always-present, handles both play & pause ──
+// touchend fires reliably on mobile; preventDefault blocks synthetic click
+centerTap.addEventListener("touchend", (e) => {
+  e.preventDefault();
+  touchHandled = true;
+  playWithSound();
+  showControls();
+  if (!vid.paused) scheduleHide(3000);
+}, { passive: false });
+
+// click: desktop + fallback (skipped if touchend already handled)
+centerTap.addEventListener("click", () => {
+  if (touchHandled) { touchHandled = false; return; }
+  playWithSound();
+  showControls();
+  if (!vid.paused) scheduleHide(3000);
+});
+
+// ── Play/pause state → update icons ──
+vid.addEventListener("play", () => {
+  playIcon.style.opacity = "0";
+  document.getElementById("btn-play").innerHTML = '<span class="material-symbols-outlined">pause</span>';
+  if (!mouseInside) scheduleHide(2500);
+});
+vid.addEventListener("pause", () => {
+  clearTimeout(controlsTimer);
+  playIcon.style.opacity = "1";
+  playIconSymbol.textContent = "play_arrow";
+  document.getElementById("btn-play").innerHTML = '<span class="material-symbols-outlined">play_arrow</span>';
+  showControls();
+});
+
+// ── Skip ──
+let _skipAcc = {left: 0, right: 0, timer: null};
+function skip(sec) {
+  const side = sec < 0 ? "left" : "right";
+  const el = document.getElementById(sec < 0 ? "flash-left" : "flash-right");
+  clearTimeout(_skipAcc.timer);
+  _skipAcc[side] += sec;
+  el.textContent = (_skipAcc[side] > 0 ? "+" : "") + _skipAcc[side] + "s";
+  flash(el);
+  _skipAcc.timer = setTimeout(() => { _skipAcc.left = 0; _skipAcc.right = 0; }, 800);
+
+  vid.currentTime = Math.max(0, Math.min(vid.duration || 0, vid.currentTime + sec));
+}
+document.getElementById("btn-back").onclick = () => skip(-5);
+document.getElementById("btn-fwd").onclick  = () => skip(5);
+
+// ── Flash ──
+function flash(el) {
+  el.classList.add("show");
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove("show"), 600);
+}
+
+// ── Double-tap zones (mobile skip) ──
+function handleTap(side) {
+  showControls();
+  if (!vid.paused) scheduleHide(3000);
+  const now = Date.now();
+  if (side === "left") {
+    if (now - lastTapLeft < 300) { skip(-5); flash(document.getElementById("flash-left")); lastTapLeft = 0; }
+    else { lastTapLeft = now; }
+  } else {
+    if (now - lastTapRight < 300) { skip(5); flash(document.getElementById("flash-right")); lastTapRight = 0; }
+    else { lastTapRight = now; }
+  }
+}
+let lastTouchEnd = 0; // ponytail: 500ms window; raise if slow devices synthesize dblclick later
+document.getElementById("tap-left").addEventListener("touchend",  () => { lastTouchEnd = Date.now(); handleTap("left"); },  { passive: true });
+document.getElementById("tap-right").addEventListener("touchend", () => { lastTouchEnd = Date.now(); handleTap("right"); }, { passive: true });
+document.getElementById("tap-left").addEventListener("dblclick",  e => { if (Date.now() - lastTouchEnd < 500) return; skip(-5); flash(document.getElementById("flash-left")); });
+document.getElementById("tap-right").addEventListener("dblclick", e => { if (Date.now() - lastTouchEnd < 500) return; skip(5);  flash(document.getElementById("flash-right")); });
+
+// ── Keyboard shortcuts ──
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+  if (e.key === " " || e.key.toLowerCase() === "k") { e.preventDefault(); playWithSound(); }
+  if (e.key.toLowerCase() === "f") { e.preventDefault(); toggleFullscreen(); }
+  if (e.key === "ArrowLeft")  { e.preventDefault(); skip(-5); }
+  if (e.key === "ArrowRight") { e.preventDefault(); skip(5); }
+});
+
+// ── Seek & time ──
+vid.ontimeupdate = () => {
+  if (!isNaN(vid.duration)) {
+    document.getElementById("seek").value = vid.currentTime;
+    document.getElementById("time").textContent = fmt(vid.currentTime) + " / " + fmt(vid.duration);
+  }
+};
+vid.onloadedmetadata = () => {
+  document.getElementById("seek").max = vid.duration;
+  document.getElementById("time").textContent = "0:00 / " + fmt(vid.duration);
+  adaptSize();
+};
+document.getElementById("seek").oninput = e => { vid.currentTime = Number(e.target.value); };
+
+// ── Play/Pause button (controls bar) ──
+document.getElementById("btn-play").onclick = playWithSound;
+
+// ── Volume ──
+document.getElementById("volume").oninput = e => {
+  vid.volume = Number(e.target.value);
+  vid.muted = vid.volume === 0;
+};
+
+// ── Fullscreen ──
+function toggleFullscreen() {
+  if (document.fullscreenElement) {
+    document.exitFullscreen();
+  } else {
+    wrap.requestFullscreen?.() || wrap.webkitRequestFullscreen?.();
+  }
+}
+document.getElementById("btn-full").onclick = toggleFullscreen;
+document.addEventListener("fullscreenchange", () => {
+  const icon = document.fullscreenElement ? "fullscreen_exit" : "fullscreen";
+  document.getElementById("btn-full").innerHTML = '<span class="material-symbols-outlined">' + icon + '</span>';
+  if (document.fullscreenElement) {
+    if (vid.videoWidth > vid.videoHeight) {
+      try { screen.orientation.lock('landscape'); } catch(e) {}
+    } else {
+      try { screen.orientation.lock('portrait'); } catch(e) {}
+    }
+  } else {
+    try { screen.orientation.unlock(); } catch(e) {}
+  }
+  showControls();
+  if (!vid.paused) scheduleHide(3000);
+});
+
+// ── Loop ──
+document.getElementById("btn-loop").onclick = () => {
+  vid.loop = !vid.loop;
+  document.getElementById("btn-loop").classList.toggle("border-indigo-400", vid.loop);
+  document.getElementById("btn-loop").classList.toggle("text-indigo-300", vid.loop);
+};
+
+// ── Resolution ──
+document.getElementById("resolution").onchange = () => {
+  const t = vid.currentTime;
+  vid.src = "/stream/" + encodeURIComponent(id);
+  vid.load();
+  vid.addEventListener("loadedmetadata", () => { vid.currentTime = t; }, { once: true });
+};
+
+// ── Pin ──
+async function togglePin() {
+  const next = !metadata.is_pinned;
+  const r = await fetch("/api/videos/" + encodeURIComponent(id) + "/pin", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ is_pinned: next })
+  });
+  if (r.ok) { metadata.is_pinned = next; updatePinBtn(); }
+}
+function updatePinBtn() {
+  const pinned = !!metadata.is_pinned;
+  const btn = document.getElementById("btn-pin");
+  btn.classList.toggle("border-indigo-400", pinned);
+  btn.classList.toggle("text-indigo-300", pinned);
+  btn.innerHTML = '<span class="material-symbols-outlined align-middle">push_pin</span> ' + (pinned ? "Pinned" : "Pin");
+}
+document.getElementById("btn-pin").onclick = togglePin;
+
+// ── Edit title inline ──
+const titleEl    = document.getElementById("title");
+const titleInput = document.getElementById("title-input");
+const editBtn    = document.getElementById("btn-edit-title");
+function enterEdit() {
+  titleInput.value = metadata.title;
+  titleEl.classList.add("hidden");
+  editBtn.classList.add("hidden");
+  titleInput.classList.remove("hidden");
+  titleInput.focus(); titleInput.select();
+}
+async function commitEdit() {
+  const newTitle = titleInput.value.trim();
+  titleInput.classList.add("hidden");
+  titleEl.classList.remove("hidden");
+  editBtn.classList.remove("hidden");
+  if (!newTitle || newTitle === metadata.title) { titleEl.textContent = metadata.title; return; }
+  const r = await fetch("/api/videos/" + encodeURIComponent(id), {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: newTitle })
+  });
+  if (r.ok) { metadata.title = newTitle; titleEl.textContent = newTitle; document.title = newTitle + " — VidMe"; localStorage.setItem("vidme_refresh", "1"); }
+  else titleEl.textContent = metadata.title;
+}
+editBtn.onclick = enterEdit;
+titleInput.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); titleInput.blur(); } });
+titleInput.addEventListener("blur", commitEdit);
+
+// ── Setup ──
+function setup() {
+  const portrait = !!metadata.is_portrait;
+  document.title = metadata.title + " — VidMe";
+  titleEl.textContent = metadata.title;
+  document.getElementById("date").textContent = new Date(metadata.created_at).toLocaleString();
+  document.getElementById("btn-download").href = "/download/" + encodeURIComponent(id);
+  updatePinBtn();
+  document.getElementById("resolution").innerHTML =
+    '<option value="original">Original</option>' +
+    (metadata.has_480p ? '<option value="480">' + (portrait ? "480w" : "480p") + '</option>' : "") +
+    (metadata.has_360p ? '<option value="360">' + (portrait ? "360w" : "360p") + '</option>' : "");
+  document.getElementById("resolution").value = metadata.has_480p ? "480" : "original";
+  if (vid.readyState < 3) showLoader();
+  wrap.style.visibility = "visible";
+  vid.poster = "/thumb/" + encodeURIComponent(id);
+  vid.src    = "/stream/" + encodeURIComponent(id);
+  vid.muted  = true;
+  vid.load();
+}
+
+if (!id) { location.href = "index.html"; }
+else {
+  fetch("/api/videos/" + encodeURIComponent(id))
+    .then(r => r.ok ? r.json() : Promise.reject())
+    .then(m => { metadata = m; setup(); })
+    .catch(() => location.href = "index.html");
+}
+
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("/service-worker.js");
+
+// ── Upload UI (mirrored from index.html — Problem #5+#6 fix) ──
+const _esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const _uploads = [];
+
+// ── IndexedDB helpers ──
+const _IDB_NAME = 'vidme-uploads', _IDB_STORE = 'uploads';
+function _idbOpen() { return new Promise((res, rej) => { const r = indexedDB.open(_IDB_NAME, 1); r.onupgradeneeded = e => e.target.result.createObjectStore(_IDB_STORE); r.onsuccess = e => res(e.target.result); r.onerror = e => rej(e.target.error); }); }
+async function _idbGetAll() { const db = await _idbOpen(); return new Promise((res, rej) => { const r = db.transaction(_IDB_STORE,'readonly').objectStore(_IDB_STORE).getAll(); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+async function _idbGet(k) { const db = await _idbOpen(); return new Promise((res, rej) => { const r = db.transaction(_IDB_STORE,'readonly').objectStore(_IDB_STORE).get(k); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+async function _idbDel(k) { const db = await _idbOpen(); return new Promise((res, rej) => { const tx = db.transaction(_IDB_STORE,'readwrite'); tx.objectStore(_IDB_STORE).delete(k); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); }
+
+// ── Toast ──
+function _toast(msg, type = 'info', duration = 4000) {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span style="flex:1">${msg}</span><button onclick="this.parentElement.remove()" style="opacity:.6;font-size:18px;line-height:1;background:none;border:none;color:inherit;cursor:pointer">&times;</button>`;
+  document.getElementById('toastContainer').appendChild(el);
+  requestAnimationFrame(() => { requestAnimationFrame(() => el.classList.add('show')); });
+  if (duration > 0) setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 300); }, duration);
+}
+
+// ── Upload Center ──
+function toggleUploadCenter() {
+  const p = document.getElementById('uploadCenter');
+  if (p.classList.contains('hidden')) {
+    p.classList.replace('hidden', 'flex');
+    renderUploadCenter();
+    requestAnimationFrame(() => p.style.transform = 'translateY(0)');
+  } else {
+    p.style.transform = 'translateY(100%)';
+    setTimeout(() => p.classList.replace('flex', 'hidden'), 300);
+  }
+}
+function updateUploadBadge() {
+  const active = _uploads.filter(u => u.status === 'uploading').length;
+  const badge = document.getElementById('uploadBadge');
+  if (!badge) return;
+  if (active > 0) { badge.textContent = active; badge.classList.remove('hidden'); }
+  else badge.classList.add('hidden');
+}
+function renderUploadCenter() {
+  const active = _uploads.filter(u => u.status === 'uploading');
+  const done = _uploads.filter(u => u.status !== 'uploading');
+  document.getElementById('ucActiveBadge').textContent = active.length;
+  updateUploadBadge();
+  let html = '';
+  if (active.length) {
+    html += '<h3 class="mb-2 text-xs font-semibold uppercase tracking-widest text-slate-500">Active</h3>';
+    html += active.map(u => `
+      <div class="mb-3 rounded-xl bg-[#171f33] p-3">
+        <div class="flex items-center gap-2">
+          <div class="vidme-loader"></div>
+          <span class="flex-1 truncate text-sm font-medium">${_esc(u.title)}</span>
+          <button onclick="cancelUpload('${u.id}')" class="text-red-400 hover:text-red-300"><span class="material-symbols-outlined" style="font-size:18px">cancel</span></button>
+        </div>
+        <div class="vidme-bar-bg mt-2">
+          <div class="vidme-bar" style="width:${u.progress}%">
+            <div class="vidme-bar-stripes"><div class="vidme-bar-stripe"></div><div class="vidme-bar-stripe"></div><div class="vidme-bar-stripe"></div></div>
+          </div>
+        </div>
+        <p class="text-xs text-slate-500 mt-1">${u.bytesTotal ? ((u.bytesSent??0)/1048576).toFixed(1) + ' / ' + (u.bytesTotal/1048576).toFixed(1) + ' MB &bull; ' : ''}${Math.round(u.progress)}%</p>
+      </div>`).join('');
+  }
+  if (done.length) {
+    html += '<div class="mb-2 mt-4 flex items-center justify-between"><h3 class="text-xs font-semibold uppercase tracking-widest text-slate-500">History</h3><button onclick="clearUploadHistory()" class="text-xs text-slate-400 hover:text-red-400">Clear history</button></div>';
+    html += done.slice().reverse().map(u => {
+      const ok = u.status === 'done';
+      const icon = ok ? 'check_circle' : 'error';
+      const color = ok ? 'text-green-400' : 'text-red-400';
+      const ts = u.timestamp ? new Date(u.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
+      return `<div class="flex items-center gap-2 py-2 border-b border-slate-800"><span class="material-symbols-outlined ${color}" style="font-size:18px">${icon}</span><span class="flex-1 truncate text-sm">${_esc(u.title)}</span><span class="text-xs text-slate-500">${ts}</span></div>`;
+    }).join('');
+  }
+  if (!active.length && !done.length) {
+    html = '<div class="flex flex-col items-center justify-center py-16 text-slate-500"><span class="material-symbols-outlined mb-2" style="font-size:48px">cloud_upload</span><p>No uploads yet</p></div>';
+  }
+  document.getElementById('uploadCenterBody').innerHTML = html;
+}
+function cancelUpload(id) {
+  const u = _uploads.find(x => x.id === id);
+  if (u) { navigator.serviceWorker?.controller?.postMessage({ type: 'sw-upload-cancel', uploadId: id }); u.status = 'cancelled'; u.timestamp = Date.now(); renderUploadCenter(); }
+}
+function clearUploadHistory() {
+  _uploads.splice(0, _uploads.length, ..._uploads.filter(u => u.status === 'uploading'));
+  renderUploadCenter();
+}
+
+// ── Upload modal ──
+function openModal() {
+  // Populate folder select from API
+  fetch('/api/folders').then(r => r.json()).then(folders => {
+    const sel = document.getElementById('folderSelect');
+    const current = sel.value;
+    sel.innerHTML = '<option value="">No folder</option>' + folders.map(f => `<option value="${f.id}">${_esc(f.name)}</option>`).join('');
+    sel.value = current;
+  }).catch(() => {});
+  document.getElementById('modal').style.display = 'block';
+}
+function closeModal() {
+  document.getElementById('modal').style.display = 'none';
+  document.getElementById('uploadFormEl').reset();
+  document.getElementById('fileName').textContent = 'Drop a video here or click to browse';
+}
+
+// File input + drag/drop
+document.getElementById('drop').onclick = () => document.getElementById('file').click();
+document.getElementById('file').onchange = e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const _ext = file.name.split('.').pop().toLowerCase();
+  const _validExts = ['mp4','mov','avi','mkv','webm','ts','m4v','3gp','flv','wmv'];
+  if (!_validExts.includes(_ext)) { alert('Format tidak didukung: .' + _ext); e.target.value = ''; return; }
+  document.getElementById('fileName').textContent = file.name;
+  const t = document.getElementById('titleInput');
+  if (t && !t.value) t.value = file.name.replace(/\.[^.]+$/, '');
+};
+document.getElementById('drop').ondragover = e => e.preventDefault();
+document.getElementById('drop').ondrop = e => {
+  e.preventDefault();
+  document.getElementById('file').files = e.dataTransfer.files;
+  document.getElementById('fileName').textContent = e.dataTransfer.files[0]?.name || '';
+};
+
+// Submit handler
+document.getElementById('uploadFormEl').onsubmit = async e => {
+  e.preventDefault();
+  const file = document.getElementById('file').files[0];
+  if (!file) return;
+  const titleInput = document.getElementById('titleInput');
+  if (titleInput && !titleInput.value.trim()) titleInput.value = file.name.replace(/\.[^.]+$/, '');
+  const title = titleInput ? titleInput.value.trim() : file.name.replace(/\.[^.]+$/, '');
+  const folderId = document.getElementById('folderSelect').value || null;
+  closeModal();
+  const clientUploadId = crypto.randomUUID();
+  _uploads.push({ id: clientUploadId, title, status: 'uploading', progress: 0, timestamp: null });
+  toggleUploadCenter();
+  const sw = navigator.serviceWorker?.controller;
+  if (sw) {
+    sw.postMessage({ type: 'sw-upload-start', uploadId: clientUploadId, file, title, folderId, filename: file.name });
+    _toast(`Upload dimulai: <b>${_esc(title)}</b>`, 'info');
+  } else {
+    _toast('Service worker belum siap. Refresh dulu.', 'error');
+  }
+};
+
+// Close modal on backdrop click
+document.getElementById('modal').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
+
+// ── SW message listener (progress/done/status) ──
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', e => {
+    const { type } = e.data;
+    if (type === 'sw-upload-progress') {
+      const { uploadId, progress, status, bytesSent, bytesTotal } = e.data;
+      const u = _uploads.find(x => x.id === uploadId);
+      if (u) { u.progress = progress; u.status = status; if (bytesSent !== undefined) u.bytesSent = bytesSent; if (bytesTotal !== undefined) u.bytesTotal = bytesTotal; renderUploadCenter(); }
+    }
+    if (type === 'sw-upload-done') {
+      const { uploadId, success, status: s } = e.data;
+      const u = _uploads.find(x => x.id === uploadId);
+      const title = e.data.title || (u ? u.title : uploadId);
+      if (u) { u.progress = success ? 100 : u.progress; u.status = s; u.timestamp = Date.now(); renderUploadCenter(); }
+      _toast(success ? '✓ "' + _esc(title) + '" selesai diupload' : '✗ Upload gagal: ' + _esc(title), success ? 'success' : 'error', success ? 4000 : 6000);
+      _idbDel(uploadId).catch(()=>{});
+    }
+    if (type === 'sw-upload-status-response') {
+      e.data.uploads.forEach(su => {
+        if (!_uploads.find(u => u.id === su.uploadId)) {
+          _uploads.push({ id: su.uploadId, title: su.title || su.uploadId, status: su.status, progress: su.status === 'done' ? 100 : 0, timestamp: su.timestamp || null });
+        }
+      });
+      updateUploadBadge(); renderUploadCenter();
+    }
+    if (type === 'sw-heartbeat-ack') { _swAlive = Date.now(); }
+  });
+
+  let _swAlive = Date.now();
+  // On SW ready: sync existing uploads + start heartbeat
+  navigator.serviceWorker.ready.then(async () => {
+    navigator.serviceWorker.controller?.postMessage({ type: 'sw-upload-status' });
+    // Sync from IDB in case uploads were started on index.html
+    try {
+      const pending = await _idbGetAll();
+      const now = Date.now();
+      for (const rec of pending) {
+        if (rec.status !== 'uploading') continue;
+        if (now - rec.startedAt > 86400000) { _idbDel(rec.uploadId).catch(()=>{}); continue; }
+        if (!_uploads.find(u => u.id === rec.uploadId)) {
+          _uploads.push({ id: rec.uploadId, title: rec.title, status: 'uploading', progress: rec.bytesDone ? (rec.bytesDone / rec.totalSize) * 100 : 0, timestamp: null });
+        }
+      }
+      updateUploadBadge(); renderUploadCenter();
+    } catch(err) {}
+  });
+  // Heartbeat
+  setInterval(() => {
+    if (Date.now() - _swAlive > 30000) {
+      const stuck = _uploads.filter(u => u.status === 'uploading');
+      if (stuck.length) _toast('Upload tertunda — akan lanjut otomatis', 'error', 6000);
+    }
+    navigator.serviceWorker.controller?.postMessage({ type: 'sw-heartbeat' });
+  }, 15000);
+}
+
+// ── Draggable upload modal ──
+(function() {
+  const card = document.getElementById('uploadForm');
+  const header = document.getElementById('modalHeader');
+  let dragging = false, sx, sy, sl, st;
+  function start(clientX, clientY) {
+    dragging = true;
+    const rect = card.getBoundingClientRect();
+    card.style.transform = 'none';
+    sl = rect.left; st = rect.top;
+    card.style.left = sl + 'px'; card.style.top = st + 'px';
+    sx = clientX; sy = clientY;
+  }
+  function move(clientX, clientY) {
+    if (!dragging) return;
+    let nl = sl + (clientX - sx), nt = st + (clientY - sy);
+    nl = Math.max(0, Math.min(nl, window.innerWidth - card.offsetWidth));
+    nt = Math.max(0, Math.min(nt, window.innerHeight - card.offsetHeight));
+    card.style.left = nl + 'px'; card.style.top = nt + 'px';
+  }
+  function end() { dragging = false; }
+  if (header) {
+    header.addEventListener('mousedown', e => { start(e.clientX, e.clientY); e.preventDefault(); });
+    document.addEventListener('mousemove', e => move(e.clientX, e.clientY));
+    document.addEventListener('mouseup', end);
+    header.addEventListener('touchstart', e => { const t = e.touches[0]; start(t.clientX, t.clientY); }, { passive: true });
+    document.addEventListener('touchmove', e => { if (dragging) { e.preventDefault(); const t = e.touches[0]; move(t.clientX, t.clientY); } }, { passive: false });
+    document.addEventListener('touchend', end);
+  }
+})();
+
+</script>
+
+</body>
+</html>

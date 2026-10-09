@@ -1,0 +1,17 @@
+{
+  "name": "VidMe",
+  "short_name": "VidMe",
+  "description": "Self-hosted video library",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b1326",
+  "theme_color": "#0b1326",
+  "icons": [
+    {
+      "src": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/navidrome.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

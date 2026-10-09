@@ -1,0 +1,2415 @@
+<!doctype html>
+<html lang="en" class="bg-[#0b1326] text-slate-100">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>VidMe</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/navidrome.svg">
+  <link rel="preload" href="/material-symbols.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/tailwind.css">
+  
+  <style>
+    @font-face{font-family:"Material Symbols Outlined";font-style:normal;font-weight:400;src:url(/material-symbols.woff2) format("woff2");font-display:block}.material-symbols-outlined{font-size:22px;line-height:1;font-family:"Material Symbols Outlined";font-weight:normal;font-style:normal;letter-spacing:normal;text-transform:none;display:inline-block;white-space:nowrap;-webkit-font-feature-settings:"liga";-webkit-font-smoothing:antialiased}
+    .scrollbar::-webkit-scrollbar{width:5px}
+    @media(min-width:1024px){aside.sidebar-scroll{display:flex!important;flex-direction:column;overflow:hidden}}.scrollbar::-webkit-scrollbar-thumb{background:#33405b;border-radius:9px}
+    .video-card.select-mode .card-check { display:flex !important; }
+    .video-card.selected { outline: 2px solid #6366f1; }
+    /* Toast */
+    #toastContainer { position:fixed; bottom:80px; right:16px; z-index:9999; display:flex; flex-direction:column; gap:8px; pointer-events:none; }
+    .toast { display:flex; align-items:center; gap:10px; padding:10px 16px; border-radius:12px; font-size:13px; font-weight:500; opacity:0; transform:translateY(8px); transition:all .25s; pointer-events:auto; max-width:320px; }
+    .toast.show { opacity:1; transform:translateY(0); }
+    .toast.success { background:#1e3a2f; border:1px solid #22c55e44; color:#86efac; }
+    .toast.error   { background:#3a1e1e; border:1px solid #ef444444; color:#fca5a5; }
+    .toast.info    { background:#1e2a3a; border:1px solid #6366f144; color:#a5b4fc; }
+    .toast-progress { height:3px; border-radius:4px; background:#6366f1; transition:width .2s; }
+    /* Actions dropdown */
+    #actionsMenu { min-width:160px; }
+    /* Folder context menu */
+    .ctx-menu { position:fixed; z-index:60; min-width:160px; }
+    .ctx-item { width:100%; }
+    /* Draggable modal */
+    #uploadForm { cursor: default; }
+    #modalHeader { cursor: grab; user-select: none; -webkit-user-select: none; }
+    #modalHeader:active { cursor: grabbing; }
+    /* Select toggle switch */
+    #selectCheckbox {
+      display: none;
+    }
+    .select-switch {
+      position: relative;
+      width: fit-content;
+      padding: 8px 16px;
+      background-color: #1a2236;
+      border-radius: 0.5em;
+      z-index: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: white;
+      font-size: 0.85em;
+      font-weight: 600;
+      transition: all 0.3s;
+      user-select: none;
+    }
+    .select-switch svg path {
+      fill: white;
+    }
+    #selectCheckbox:checked + .select-switch {
+      background-color: #7C70E6;
+      box-shadow: 0px 0px 40px rgba(124, 112, 230, 0.438);
+    }
+    /* Upload button dark neumorphic */
+    .upload-btn {
+      position: relative;
+      color: #fff;
+      padding: 8px 16px;
+      font-size: 0.85em;
+      font-weight: 600;
+      border-radius: 0.5em;
+      background: #1a2236;
+      border: 1px solid #1a2236;
+      transition: all 0.3s;
+      box-shadow: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .upload-btn:active {
+      color: #aaa;
+      box-shadow: none;
+    }
+    @media(min-width:1024px){#searchWrapper{display:block!important}#uploadOpen{display:flex!important}
+      #sidebar{transition:margin-left 0.3s cubic-bezier(0.25,1,0.5,1)}
+      .sidebar-collapsed #sidebar{margin-left:-280px}
+      #main-content{transition:margin-left 0.3s cubic-bezier(0.25,1,0.5,1)}
+      .sidebar-collapsed #main-content{margin-left:0!important}
+      #main-content{margin-left:280px}
+    }
+    /* Upload reskin */
+    .vidme-loader { display:block; width:20px; height:20px; position:relative; flex-shrink:0; }
+    .vidme-loader:before, .vidme-loader:after { content:""; position:absolute; left:50%; bottom:0; width:12px; height:12px; border-radius:50%; background:#7dd3fc; transform:translate(-50%,0%) scale(1); animation:vidme_push 2s infinite linear; }
+    .vidme-loader:after { animation-delay:1s; }
+    @keyframes vidme_push { 0%,50%{ transform:translate(-50%,0%) scale(1); } 100%{ transform:translate(-50%,-100%) scale(0); } }
+    .vidme-bar-bg { --h:8px; display:flex; align-items:center; box-sizing:border-box; padding:3px; width:100%; height:var(--h); background-color:#0f1a2a; box-shadow:#0c0c0c -2px 2px 4px 0px inset; border-radius:calc(var(--h)/2); overflow:hidden; }
+    .vidme-bar { position:relative; display:flex; align-items:center; --h:6px; height:var(--h); width:0%; background:linear-gradient(0deg,rgba(14,165,233,1) 0%,rgba(125,211,252,1) 100%); border-radius:calc(var(--h)/2); transition:width 0.2s; overflow:hidden; }
+    .vidme-bar-stripes { position:absolute; display:flex; align-items:center; gap:18px; }
+    .vidme-bar-stripe { background:linear-gradient(-45deg,rgba(255,255,255,1) 0%,rgba(255,255,255,0) 70%); width:10px; height:45px; opacity:0.3; rotate:45deg; }
+    /* vidme-v27: pagination css baru (pengganti pg lama) */
+    .pagination-wrapper { display:flex; justify-content:center; padding:20px 0 8px; }
+    .j-pagination { display:inline-flex; align-items:center; justify-content:center; gap:4px; flex-wrap:wrap; }
+    .j-pagination .pagination__item { min-width:36px; height:36px; display:inline-flex; align-items:center; justify-content:center; padding:0 8px; border-radius:8px; color:#94a3b8; font-size:14px; cursor:pointer; text-decoration:none; transition:all .15s; }
+    .j-pagination a.pagination__item:hover { background:#1e293b; color:#e2e8f0; }
+    .j-pagination .pagination-active { background:rgba(99,102,241,.15); border:1px solid #6366f1; color:#a5b4fc; font-weight:700; }
+    .j-pagination .pagination-disabled { opacity:.35; cursor:not-allowed; }
+    /* vidme-v27: Suggested 15 desktop / 12 mobile */
+    .sugg-grid > *:nth-child(n+13) { display:none; }
+    @media (min-width: 1024px) { .sugg-grid > *:nth-child(n+13) { display:revert; } }
+    /* vidme-v27: explore v2 css — From Uiverse.io by vinodjangid07, hijau diganti biru langit (catatan user 25-09-26) */
+    .button {
+      width: 110px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 10px;
+      background-color: rgb(56, 189, 248);
+      border-radius: 30px;
+      color: rgb(19, 19, 19);
+      font-weight: 600;
+      border: none;
+      position: relative;
+      cursor: pointer;
+      box-shadow: 5px 5px 10px rgba(0, 0, 0, 0.116);
+      padding-left: 8px;
+      transition-duration: .5s;
+    }
+
+    .svgIcon {
+      height: 25px;
+      transition-duration: 1.5s;
+    }
+
+    .button:hover {
+      background-color: rgb(125, 211, 252);
+      transition-duration: .5s;
+    }
+
+    .button:active {
+      transform: scale(0.97);
+      transition-duration: .2s;
+    }
+
+    .button:hover .svgIcon {
+      transform: rotate(250deg);
+      transition-duration: 1.5s;
+    }
+    /* vidme-recent-hero v2.5: one large card per slide, scoped to Recent Uploads */
+    .recent-slider { position:relative; width:min(100%,960px); margin:0 auto; overflow:hidden; border-radius:16px; background:#0b1326; box-shadow:0 12px 32px rgba(0,0,0,.28); }
+    .recent-slides { display:flex; overflow-x:auto; scroll-snap-type:x mandatory; scroll-behavior:smooth; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+    .recent-slides::-webkit-scrollbar { display:none; }
+    .recent-slides .video-card { position:relative; flex:0 0 100%; width:100%; min-width:100%; margin:0; padding:0 !important; overflow:hidden; border-radius:16px; scroll-snap-align:start; scroll-snap-stop:always; background:#111827; }
+    .recent-slides .video-card:hover { transform:none; background:#111827; }
+    .recent-slides .video-card > .relative { aspect-ratio:16 / 9; border-radius:0; background:#050507; }
+    .recent-slides .video-card > .relative::after { content:""; position:absolute; inset:0; pointer-events:none; background:linear-gradient(to top,rgba(0,0,0,.82),rgba(0,0,0,.08) 58%,rgba(0,0,0,.1)); }
+    .recent-slides .video-card > p.mt-3 { position:absolute; z-index:2; left:28px; right:28px; bottom:40px; margin:0; color:#fff; font-size:clamp(1.1rem,2.2vw,1.8rem); line-height:1.2; text-shadow:0 2px 8px rgba(0,0,0,.7); }
+    .recent-slides .video-card > p.text-xs { position:absolute; z-index:2; left:28px; bottom:18px; margin:0; color:rgba(226,232,240,.78); }
+    .recent-slides .video-card .absolute { z-index:3; }
+    .recent-nav { position:absolute; z-index:5; top:50%; width:52px; height:52px; padding:0; border:1px solid rgba(255,255,255,.65); border-radius:50%; line-height:1; text-align:center; cursor:pointer; transform:translateY(-50%); background:rgba(255,255,255,.84); color:#1e293b; box-shadow:0 3px 12px rgba(0,0,0,.28); user-select:none; -webkit-user-select:none; transition:all .2s ease; }
+    .recent-nav:hover { background:#fff; color:#0f172a; transform:translateY(-50%) scale(1.08); }
+    #recent-prev { left:18px; }
+    #recent-next { right:18px; }
+    .recent-counter { position:absolute; z-index:5; top:16px; right:20px; padding:5px 10px; border-radius:999px; background:rgba(0,0,0,.48); color:#fff; font-size:12px; font-weight:700; letter-spacing:.04em; }
+    .recent-dots { position:absolute; z-index:5; left:50%; bottom:16px; display:flex; align-items:center; gap:8px; transform:translateX(-50%); }
+    .recent-dot { width:9px; height:9px; padding:0; border:0; border-radius:5px; cursor:pointer; background:rgba(255,255,255,.52); transition:all .3s cubic-bezier(.77,0,.175,1); }
+    .recent-dot:hover { background:rgba(255,255,255,.82); }
+    .recent-dot.active { width:24px; background:#fff; box-shadow:0 1px 5px rgba(0,0,0,.35); }
+    @media (max-width:640px) {
+      .recent-slider { border-radius:12px; }
+      .recent-slides .video-card { border-radius:12px; }
+      .recent-slides .video-card > p.mt-3 { left:18px; right:18px; bottom:34px; }
+      .recent-slides .video-card > p.text-xs { left:18px; bottom:14px; }
+      .recent-nav { width:42px; height:42px; }
+      #recent-prev { left:10px; }
+      #recent-next { right:10px; }
+      .recent-counter { top:10px; right:12px; }
+      .recent-dots { bottom:10px; }
+    }
+
+    /* ── vidme-cardsize v2.2 (22-09-26): grid ala Vcs (minmax), SEMUA frame 9:16, landscape letterbox (user opsi A) ── */
+    #videos .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 18px; }
+    @media (min-width: 760px) { #videos .grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); } }
+    @media (min-width: 1100px) { #videos .grid { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); } }
+    #videos .grid .video-card { width: auto; min-width: 0; }
+    #videos .grid .video-card .aspect-video { aspect-ratio: 200.833 / 414.097; background: #050507; }
+    #videos .grid .video-card .aspect-video img { object-fit: contain; } /* letterbox: landscape utuh, bar atas-bawah */
+    /* ── Player view CSS (from player.html, deduped) ── */
+    @font-face{font-family:"Material Symbols Outlined";font-style:normal;font-weight:400;src:url(/material-symbols.woff2) format("woff2");font-display:block}.material-symbols-outlined{font-size:22px;line-height:1;font-family:"Material Symbols Outlined";font-weight:normal;font-style:normal;letter-spacing:normal;text-transform:none;display:inline-block;white-space:nowrap;-webkit-font-feature-settings:"liga";-webkit-font-smoothing:antialiased}
+    /* Skip flash */
+    .skip-flash {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      background: rgba(0,0,0,0.55); border-radius: 9999px;
+      padding: 10px 18px; font-size: 14px; font-weight: 600;
+      opacity: 0; transition: opacity 0.15s;
+      color: #fff; white-space: nowrap;
+      pointer-events: none;
+      user-select: none;
+      z-index: 25;
+    }
+    .skip-flash.show { opacity: 1; }
+    /* Tap zones + center tap: no text selection, no tap highlight */
+    #tap-left, #tap-right, #center-tap {
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+    }
+    /* Play icon fade (opacity only, never visibility:hidden) */
+    #play-icon {
+      transition: opacity 0.2s;
+    }
+    /* Controls overlay */
+    #controls-overlay {
+      transition: opacity 0.25s;
+      pointer-events: none;
+    }
+    #controls-overlay.hidden-ctrl {
+      opacity: 0;
+    }
+    #controls-overlay input,
+    #controls-overlay button {
+      pointer-events: auto;
+    }
+    /* Fullscreen: center + fill */
+    #player-wrap:-webkit-full-screen { width:100vw; height:100vh; display:flex; align-items:center; justify-content:center; }
+    #player-wrap:fullscreen { width:100vw; height:100vh; display:flex; align-items:center; justify-content:center; }
+    #player-wrap:-webkit-full-screen video { width:100%; height:100%; object-fit:contain; }
+    #player-wrap:fullscreen video { width:100%; height:100%; object-fit:contain; }
+  /* Buffering spinner */
+  .vid-spinner svg { transform-origin:center; animation:rotate4 2s linear infinite; }
+  .vid-spinner circle { fill:none; stroke:hsl(214,97%,59%); stroke-width:2; stroke-dasharray:1,200; stroke-dashoffset:0; stroke-linecap:round; animation:dash4 1.5s ease-in-out infinite; }
+  @keyframes rotate4 { 100%{ transform:rotate(360deg); } }
+  @keyframes dash4 { 0%{stroke-dasharray:1,200;stroke-dashoffset:0} 50%{stroke-dasharray:90,200;stroke-dashoffset:-35px} 100%{stroke-dashoffset:-125px} }
+
+    /* Upload UI (mirrored from index.html) */
+
+    /* ── SPA player view: sidebar collapse (Ticket 05) ── */
+    body.pv-mode #sidebar { transform: translateX(-100%); transition: transform .3s cubic-bezier(0.25,1,0.5,1); }
+    body.pv-mode #sidebar.pv-sidebar-open { transform: translateX(0); }
+    #pvSidebarLogo { display: none; }
+    body.pv-mode #pvSidebarLogo { display: flex; align-items: center; }
+    @media(min-width:1024px){ body.pv-mode #pvSidebarLogo { display: flex; } }
+    /* ── SPA player view: bottom nav clearance (Bug fix) ── */
+    body.pv-mode #view-player { padding-bottom: 72px; }
+    @media(min-width:1024px){ body.pv-mode #view-player { padding-bottom: 0; } }
+  </style>
+</head>
+
+<body class="min-h-screen bg-[#0b1326] font-body">
+
+  <!-- Toast container -->
+  <div id="toastContainer"></div>
+
+  <!-- SPA view: browse -->
+  <div id="view-browse">
+
+  <!-- Sidebar -->
+  <aside id="sidebar" class="fixed inset-y-0 left-0 hidden w-[280px] border-r border-slate-800 bg-[#10182b] p-6 lg:block sidebar-scroll">
+    <div class="mb-10 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-3 text-2xl font-bold font-heading">
+        <span class="material-symbols-outlined text-indigo-400">play_circle</span>VidMe
+      </a>
+      <button id="sidebarToggleBtn" onclick="toggleSidebar()" title="Collapse sidebar" style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:8px;background:transparent;border:none;cursor:pointer;color:#475569;flex-shrink:0"><span class="material-symbols-outlined">left_panel_close</span></button>
+    </div>
+    <div class="mb-4 flex items-center justify-between">
+      <h2 class="text-xs font-semibold uppercase tracking-widest text-slate-500">Folders</h2>
+      <button id="newFolder" class="rounded p-1 text-slate-400 hover:bg-slate-700" title="New folder">
+        <span class="material-symbols-outlined">add</span>
+      </button>
+    </div>
+    <nav id="folders" class="scrollbar space-y-1 overflow-y-auto" style="flex:1;min-height:0"></nav>
+  </aside>
+
+  <!-- Main -->
+  <main id="main-content" class="pb-24 lg:pb-8">
+    <header class="sticky top-0 z-30 flex items-center gap-3 border-b border-slate-800 bg-[#0b1326]/90 px-4 py-4 backdrop-blur md:px-8">
+      <button id="sidebarRevealBtn" onclick="toggleSidebar()" title="Open sidebar" style="display:none;align-items:center;justify-content:center;gap:6px;height:36px;padding:0 10px;border-radius:8px;background:#10182b;border:1px solid #1e293b;cursor:pointer;color:#94a3b8;font-size:13px;white-space:nowrap;flex-shrink:0"><span class="material-symbols-outlined" style="font-size:20px">left_panel_open</span></button>
+      <h1 class="font-heading text-xl font-semibold lg:hidden">VidMe</h1>
+      <div id="searchWrapper" class="relative ml-auto w-full max-w-md" style="display:none">
+        <span class="material-symbols-outlined absolute left-3 top-2.5 text-slate-500">search</span>
+        <input id="search" class="w-full rounded-xl border border-slate-700 bg-[#171f33] py-2.5 pl-10 pr-10 outline-none focus:border-indigo-400" placeholder="Search videos">
+        <button type="button" class="search-clear" id="searchClearDesktop" style="display:none;position:absolute;right:8px;top:9px;z-index:10;align-items:center;justify-content:center;width:26px;height:26px;border:none;background:transparent;color:#94a3b8;cursor:pointer" onclick="clearSearch()" aria-label="Clear search"><span class="material-symbols-outlined" style="font-size:18px">close</span></button>
+      </div>
+      <input type="checkbox" id="selectCheckbox" />
+      <label for="selectCheckbox" class="select-switch" id="selectToggle" style="margin-left:auto">
+        <span class="material-symbols-outlined" style="font-size:18px">checklist</span>
+        <span class="hidden sm:inline">Select</span>
+      </label>
+      <button id="uploadOpen" onclick="toggleUploadCenter()" class="upload-btn" style="display:none">
+        <span class="material-symbols-outlined" style="font-size:18px">upload</span>
+        <span class="hidden sm:inline">Upload</span>
+        <span id="uploadBadgeDesktop" class="hidden absolute -top-1 -right-1 min-w-[18px] h-[18px] text-white text-[10px] font-bold flex items-center justify-center px-1" style="background:#7C70E6;box-shadow:0 0 8px rgba(124,112,230,0.6)">0</span>
+      </button>
+    </header>
+
+    <section class="px-4 py-8 md:px-8">
+      <div id="mobileSearchOverlay" style="display:none;margin-bottom:16px"><div style="position:relative"><span class="material-symbols-outlined" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#64748b;pointer-events:none">search</span><input id="mobileSearchInput" placeholder="Search videos..." style="width:100%;background:#171f33;border:1px solid #334155;border-radius:12px;padding:10px 40px 10px 40px;color:#f1f5f9;outline:none;font-size:15px" oninput="document.getElementById('search').value=this.value;render()" onkeydown="if(event.key==='Enter'){this.blur()}"><button type="button" class="search-clear" id="searchClearMobile" style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);z-index:10;align-items:center;justify-content:center;width:28px;height:28px;border:none;background:transparent;color:#94a3b8;cursor:pointer" onclick="clearSearch('mobile')" aria-label="Clear search"><span class="material-symbols-outlined" style="font-size:18px">close</span></button></div></div><div class="mb-6 flex items-end justify-between">
+        <div>
+          <p class="text-sm text-indigo-300">Your collection</p>
+          <h2 id="heading" class="font-heading text-3xl font-bold">All videos</h2>
+        </div>
+        <span id="count" class="text-sm text-slate-500"></span>
+      </div>
+      <div id="videos" class="space-y-10"></div>
+      <p id="empty" class="hidden py-20 text-center text-slate-500">No videos found.</p>
+    </section>
+  </main>
+
+  </div><!-- /view-browse -->
+
+  <!-- SPA view: player (hidden by default; populated by SPA migration) -->
+  <div id="view-player" style="display:none">
+<header class="flex items-center gap-3 border-b border-slate-800 px-4 py-3">
+      <button id="pvSidebarLogo" title="Open sidebar" style="align-items:center;gap:8px;padding:6px 12px;border-radius:10px;background:transparent;border:none;cursor:pointer;color:#a5b4fc;font-weight:700;font-size:15px"><span class="material-symbols-outlined" style="color:#818cf8">play_circle</span>VidMe</button>
+      <a href="/" id="btn-goback" class="ml-auto flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-300 hover:bg-slate-800">
+        <span class="material-symbols-outlined">arrow_back</span>Back
+      </a>
+    </header>
+<main class="mx-auto max-w-6xl px-4 py-6 md:px-8" style="padding-top:24px">
+    <!-- Video container: shrink-wrap -->
+    <div class="relative overflow-hidden rounded-2xl bg-black" id="player-wrap" style="width:100%;height:80vh;border:none;outline:none;visibility:hidden;background:#000">
+      <!-- Double-tap zones (mobile skip) — left/right 1/3 -->
+      <div id="tap-left"  class="absolute top-0 left-0 z-10" style="height:100%;width:calc(33.333% + 1px)"></div>
+      <div id="tap-right" class="absolute top-0 right-0 z-10" style="height:100%;width:calc(33.333% + 1px)"></div>
+      <!-- Center tap: play/pause — covers middle 1/3, always in DOM -->
+      <button id="center-tap" class="absolute top-0 left-1/3 z-20 w-1/3 border-0 p-0 bg-transparent" style="height:100%">
+        <div id="play-icon" class="flex items-center justify-center w-full h-full">
+          <div class="rounded-full bg-black/60 p-4 pointer-events-none">
+            <span id="play-icon-symbol" class="material-symbols-outlined text-white" style="font-size:48px">play_arrow</span>
+          </div>
+        </div>
+      </button>
+      <!-- Skip flash indicators -->
+      <div id="flash-left"  class="skip-flash" style="left:10%">-5s</div>
+      <div id="flash-right" class="skip-flash" style="right:10%">+5s</div>
+      <!-- Video -->
+      <video id="video" preload="metadata" playsinline muted style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;object-position:center;background:#000"></video>
+      <div id="vid-loader" style="display:none;position:absolute;inset:0;z-index:25;pointer-events:none;display:flex;align-items:center;justify-content:center;background:transparent">
+        <div style="border-radius:9999px;background:rgba(0,0,0,0.6);padding:16px;display:flex;align-items:center;justify-content:center">
+          <div class="vid-spinner">
+            <svg viewBox="25 25 50 50" style="width:48px;height:48px">
+              <circle r="20" cy="50" cx="50"></circle>
+            </svg>
+          </div>
+        </div>
+      </div>
+      <!-- Controls overlay -->
+      <div id="controls-overlay" class="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/90 to-transparent p-4 pt-16">
+        <input id="seek" type="range" min="0" value="0" class="mb-3 h-1 w-full cursor-pointer accent-indigo-400">
+        <div class="flex items-center gap-3">
+          <button id="btn-play" aria-label="Play/Pause">
+            <span class="material-symbols-outlined">play_arrow</span>
+          </button>
+          <button id="btn-back" aria-label="Back 5s" title="Back 5s">
+            <span class="material-symbols-outlined">replay_5</span>
+          </button>
+          <button id="btn-fwd" aria-label="Forward 5s" title="Forward 5s">
+            <span class="material-symbols-outlined">forward_5</span>
+          </button>
+          <span id="time" class="text-xs">0:00 / 0:00</span>
+          <input id="volume" class="ml-auto w-20 accent-indigo-400" type="range" min="0" max="1" step=".05" value="1" aria-label="Volume">
+          <button id="btn-full" aria-label="Fullscreen">
+            <span class="material-symbols-outlined">fullscreen</span>
+          </button>
+        </div>
+      </div>
+    </div>
+    <!-- Info section -->
+    <section class="py-6">
+      <div class="flex items-center gap-2 group/title">
+        <h1 id="title" class="font-heading text-2xl font-bold" style="word-break: break-word; overflow-wrap: anywhere;">Loading…</h1>
+        <button id="btn-edit-title" class="rounded p-1 text-slate-500 hover:text-indigo-300 opacity-0 group-hover/title:opacity-100 transition" title="Edit title">
+          <span class="material-symbols-outlined" style="font-size:18px">edit</span>
+        </button>
+      </div>
+      <input id="videoTitleInput" class="hidden w-full rounded-lg border border-indigo-400 bg-[#171f33] px-3 py-2 font-heading text-2xl font-bold outline-none mt-1" type="text">
+      <p id="date" class="mt-2 text-sm text-slate-500"></p>
+      <div class="mt-5 flex flex-wrap items-center gap-3">
+        <button id="btn-loop" class="pill rounded-full border border-slate-700 px-4 py-2 text-sm">
+          <span class="material-symbols-outlined align-middle">repeat</span> Loop
+        </button>
+        <button id="btn-pin" class="pill rounded-full border border-slate-700 px-4 py-2 text-sm">
+          <span class="material-symbols-outlined align-middle">push_pin</span> Pin
+        </button>
+        <a id="btn-download" class="pill rounded-full border border-slate-700 px-4 py-2 text-sm" download>
+          <span class="material-symbols-outlined align-middle">download</span> Download
+        </a>
+        <select id="resolution" class="rounded-full border border-slate-700 bg-[#171f33] px-4 py-2 text-sm outline-none"></select>
+      </div>
+    </section>
+</main>
+</div>
+
+  <!-- Bottom nav mobile -->
+  <nav id="bottomNav" class="fixed inset-x-0 bottom-0 z-40 flex justify-around border-t border-slate-800 bg-[#10182b] p-3 lg:hidden">
+    <a href="/" class="flex flex-col items-center gap-1 text-xs text-indigo-300"><span class="material-symbols-outlined">home</span>Home</a>
+    <button onclick="var o=document.getElementById('mobileSearchOverlay');var show=o.style.display==='none';o.style.display=show?'block':'none';if(show){document.getElementById('mobileSearchInput').focus()}else{document.getElementById('mobileSearchInput').value='';document.getElementById('search').value='';render()}" class="flex flex-col items-center gap-1 text-xs text-slate-400"><span class="material-symbols-outlined">search</span>Search</button>
+    <button onclick="toggleUploadCenter()" class="relative flex flex-col items-center gap-1 text-xs text-slate-400"><span class="material-symbols-outlined">upload</span>Upload<span id="uploadBadge" class="hidden absolute -top-1 right-1 min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1">0</span></button>
+    <button onclick="toggleLibraryPanel()" class="flex flex-col items-center gap-1 text-xs text-slate-400"><span class="material-symbols-outlined">video_library</span>Library</button>
+  </nav>
+
+  <!-- Multi-select action bar -->
+  <div id="selectBar" class="hidden fixed inset-x-0 bottom-0 z-30 items-center gap-2 border-t border-slate-700 bg-[#171f33] px-3 py-2 lg:pl-[296px]">
+    <span id="selCount" class="text-xs text-slate-300 shrink-0">0 selected</span>
+    <button id="selAll"  class="shrink-0 rounded-lg border border-slate-600 px-2 py-1 text-xs hover:bg-slate-700">All</button>
+    <button id="selNone" class="shrink-0 rounded-lg border border-slate-600 px-2 py-1 text-xs hover:bg-slate-700">None</button>
+    <!-- Actions dropdown -->
+    <div class="relative ml-auto">
+      <button id="selActionsBtn" class="shrink-0 flex items-center gap-1 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold hover:bg-indigo-500 disabled:opacity-40" disabled>
+        <span class="material-symbols-outlined" style="font-size:16px">tune</span>
+        <span id="selActionsLabel">Actions</span>
+        <span class="material-symbols-outlined" style="font-size:14px">expand_less</span>
+      </button>
+      <div id="actionsMenu" class="absolute bottom-full right-0 mb-2 hidden rounded-xl border border-slate-700 bg-[#10182b] py-1 shadow-xl">
+        <button id="actCopy"   class="flex w-full items-center gap-3 px-4 py-2.5 text-sm hover:bg-slate-800"><span class="material-symbols-outlined" style="font-size:18px">file_copy</span>Copy to folder</button>
+        <button id="actMove"   class="flex w-full items-center gap-3 px-4 py-2.5 text-sm hover:bg-slate-800"><span class="material-symbols-outlined" style="font-size:18px">drive_file_move</span>Move to folder</button>
+        <button id="actPin"    class="flex w-full items-center gap-3 px-4 py-2.5 text-sm hover:bg-slate-800"><span class="material-symbols-outlined" style="font-size:18px">push_pin</span>Pin selected</button>
+        <button id="actUnpin"  class="flex w-full items-center gap-3 px-4 py-2.5 text-sm hover:bg-slate-800"><span class="material-symbols-outlined" style="font-size:18px">cancel</span>Unpin selected</button>
+        <button id="actDownload" class="flex w-full items-center gap-3 px-4 py-2.5 text-sm hover:bg-slate-800"><span class="material-symbols-outlined" style="font-size:18px">download</span>Download as ZIP</button>
+        <div class="my-1 border-t border-slate-700"></div>
+        <button id="actDelete" class="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:bg-slate-800"><span class="material-symbols-outlined" style="font-size:18px">delete</span>Delete selected</button>
+      </div>
+    </div>
+    <button id="selCancel" class="shrink-0 rounded-lg border border-slate-600 px-2 py-1 text-xs hover:bg-slate-700">Cancel</button>
+  </div>
+
+  <!-- Upload Modal -->
+  <div id="modal" class="fixed inset-0 z-40 hidden bg-black/60 backdrop-blur-sm" style="display:none">
+    <form id="uploadForm" class="fixed z-50 w-full max-w-lg rounded-2xl border border-slate-700 bg-[#171f33] p-6 shadow-2xl" style="top:50%;left:50%;transform:translate(-50%,-50%)">
+      <div id="modalHeader" class="mb-5 flex justify-between">
+        <h2 class="font-heading text-xl font-semibold">Upload video</h2>
+        <button type="button" onclick="closeModal()" class="text-slate-400"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <label id="drop" class="block cursor-pointer rounded-xl border-2 border-dashed border-slate-600 p-10 text-center hover:border-indigo-400">
+        <input id="file" name="video" type="file" class="hidden" multiple> <!-- vidme-mupload: multi-file -->
+        <span class="material-symbols-outlined mb-2 text-4xl text-indigo-400">cloud_upload</span>
+        <p id="fileName">Drop a video here or click to browse</p>
+      </label>
+      <div class="mt-4 space-y-3">
+        <input name="title" id="titleInput" class="w-full rounded-lg border border-slate-700 bg-[#0b1326] p-3 outline-none" placeholder="Title (optional)">
+        <select name="folder_id" id="folderSelect" class="w-full rounded-lg border border-slate-700 bg-[#0b1326] p-3 outline-none">
+          <option value="">No folder</option>
+        </select>
+      </div>
+      <div class="mt-6 flex justify-end gap-3">
+        <button type="button" onclick="closeModal()" class="rounded-xl px-4 py-2 text-slate-300 hover:bg-slate-700">Cancel</button>
+        <button id="startUploadBtn" class="rounded-xl bg-indigo-500 px-5 py-2 font-semibold hover:bg-indigo-400">Start Upload</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Folder picker modal (copy/move) -->
+  <div id="folderPickerModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+    <div class="w-full max-w-sm rounded-2xl border border-slate-700 bg-[#171f33] p-6 shadow-2xl">
+      <h2 id="folderPickerTitle" class="font-heading text-lg font-semibold mb-4">Pick folder</h2>
+      <div id="folderPickerList" class="space-y-2 max-h-60 overflow-y-auto mb-4"></div>
+      <div class="flex justify-end">
+        <button id="folderPickerCancel" class="rounded-xl px-4 py-2 text-slate-300 hover:bg-slate-700">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom prompt modal -->
+  <div id="promptModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+    <div class="w-full max-w-sm rounded-2xl border border-slate-700 bg-[#171f33] p-6 shadow-2xl">
+      <h2 id="promptTitle" class="font-heading text-lg font-semibold mb-4">Enter value</h2>
+      <input id="promptInput" class="w-full rounded-lg border border-slate-700 bg-[#0b1326] p-3 outline-none focus:border-indigo-400 mb-4" type="text" placeholder="">
+      <div class="flex justify-end gap-3">
+        <button id="promptCancel" class="rounded-xl px-4 py-2 text-slate-300 hover:bg-slate-700">Cancel</button>
+        <button id="promptOk" class="rounded-xl bg-indigo-500 px-5 py-2 font-semibold hover:bg-indigo-400">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom confirm modal -->
+  <div id="confirmModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+    <div class="w-full max-w-sm rounded-2xl border border-slate-700 bg-[#171f33] p-6 shadow-2xl">
+      <h2 id="confirmTitle" class="font-heading text-lg font-semibold mb-2">Confirm</h2>
+      <p id="confirmMsg" class="text-slate-300 text-sm mb-6"></p>
+      <div class="flex justify-end gap-3">
+        <button id="confirmCancel" class="rounded-xl px-4 py-2 text-slate-300 hover:bg-slate-700">Cancel</button>
+        <button id="confirmOk" class="rounded-xl bg-red-600 px-5 py-2 font-semibold hover:bg-red-500">Delete</button>
+      </div>
+    </div>
+  </div>
+
+<!-- Mobile Library Panel (GDrive style) -->
+<div id="libraryPanel" class="fixed inset-0 z-40 hidden flex-col bg-[#0b1326] lg:hidden translate-y-full transition-transform duration-300 ease-out">
+  <div class="flex items-center justify-between border-b border-slate-800 px-4 py-4">
+    <h2 class="font-heading text-xl font-bold">Library</h2>
+    <div class="flex items-center gap-2">
+      <button onclick="createNewFolder()" class="rounded p-1 text-slate-400 hover:text-indigo-300" title="New folder"><span class="material-symbols-outlined">create_new_folder</span></button>
+      <button onclick="toggleLibraryPanel()" class="rounded p-1 text-slate-400 hover:text-indigo-300"><span class="material-symbols-outlined">close</span></button>
+    </div>
+  </div>
+  <div id="libraryList" class="scrollbar flex-1 overflow-y-auto"></div>
+</div>
+
+
+
+<div id="ctxMenu" class="hidden fixed z-50 min-w-[160px] rounded-xl border border-slate-700 bg-[#1a2236] py-1 shadow-xl text-sm text-slate-200"></div>
+<!-- Upload Center drawer (mobile + desktop) -->
+<div id="uploadCenter" class="fixed inset-x-0 bottom-0 z-40 hidden flex-col rounded-t-2xl border border-slate-700 bg-[#10182b] shadow-2xl lg:left-auto lg:right-4 lg:bottom-4 lg:w-[380px] lg:rounded-2xl" style="max-height:70vh;transform:translateY(100%);transition:transform .3s ease-out">
+  <div class="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+    <div class="flex items-center gap-2">
+      <h2 class="font-heading text-lg font-bold">Upload Center</h2>
+      <span id="ucActiveBadge" class="rounded-full bg-indigo-500 px-2 py-0.5 text-xs font-semibold text-white">0</span>
+    </div>
+    <button onclick="toggleUploadCenter()" class="text-slate-400"><span class="material-symbols-outlined">close</span></button>
+  </div>
+  <div id="uploadCenterBody" class="scrollbar flex-1 overflow-y-auto px-4 py-3"></div>
+  <div class="border-t border-slate-800 p-4">
+    <button onclick="toggleUploadCenter();setTimeout(openModal,350)" class="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-500 py-3 font-semibold hover:bg-indigo-400"><span class="material-symbols-outlined">add</span>New Upload</button>
+  </div>
+</div>
+
+<script>
+/* vidme-rc5 */
+/* vidme-rc3.1 */
+/* vidme-rc3 */
+const $ = s => document.querySelector(s);
+const state = { videos: [], folders: [], folderTree: [], folder: null, selectMode: false, selected: new Set(), uploads: [] };
+// vidme-paging: 16 card/page; page HANYA di Home utama (tanpa folder/search) via ?page=N
+const PAGE_SIZE = 20; // vidme-v27: 20 card/page (keputusan user 25-09-26)
+state.page = 1;
+function _pageParam() {
+  const p = parseInt(new URLSearchParams(location.search).get('page'), 10);
+  return Number.isFinite(p) && p >= 1 ? p : null;
+}
+function pageUrl(n) {
+  const u = new URL(location.href);
+  if (n === null) u.searchParams.delete('page'); else u.searchParams.set('page', String(n));
+  return u.pathname + (u.searchParams.toString() ? '?' + u.searchParams.toString() : '');
+}
+function clampPage(totalPages) { if (state.page > totalPages) state.page = totalPages; if (state.page < 1) state.page = 1; }
+// vidme-suggested: shuffle deterministic, seed = shift 6 jam (ganti tiap 6 jam, keputusan user 25-09-26)
+function _seededShuffle(arr, seed) {
+  const a = arr.slice();
+  let s = seed >>> 0;
+  const rnd = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+function suggestedVideos(vs) {
+  const pool = vs.filter(v => !v.is_pinned && v.status === 'ready');
+  const seed = Math.floor(Date.now() / (6 * 3600 * 1000));
+  return _seededShuffle(pool, seed + 7).slice(0, 15); // vidme-v27: slice 15 (15 desktop; mobile 12 via CSS)
+}
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":' &#39;'}[c]));
+function slugify(name) { return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); }
+// vidme-library: openVideo ikutkan konteks folder virtual → URL /library/<view>/v/:id (22-09-26)
+function openVideo(videoId, folderId) {
+  try { sessionStorage.setItem('vidme-player-return', location.pathname + location.search); } catch (e) {} // vidme-v28b: asal SEBELUM pushState
+  let ctx = folderId || '';
+  if (state.folder === '__portrait__' || state.folder === '__landscape__' || state.folder === 'null') ctx = state.folder;
+  if (ctx === '__portrait__') return Router.navigate('/library/portrait/v/' + encodeURIComponent(videoId));
+  if (ctx === '__landscape__') return Router.navigate('/library/landscape/v/' + encodeURIComponent(videoId));
+  if (ctx === 'null') return Router.navigate('/library/uncategorized/v/' + encodeURIComponent(videoId));
+  const f = ctx ? state.folders.find(x => x.id === ctx) : null;
+  const s = f ? slugify(f.name) : '';
+  Router.navigate(s ? '/' + s + '/v/' + encodeURIComponent(videoId) : '/v/' + encodeURIComponent(videoId));
+}
+async function api(url, opts) { const r = await fetch(url, opts); if (!r.ok) throw Error(await r.text()); return r.json(); }
+
+// ── IndexedDB persistence for upload resume (survives SW/OS kill) ──
+const IDB_NAME = 'vidme-uploads', IDB_STORE = 'uploads';
+function idbOpen() { return new Promise((res, rej) => { const r = indexedDB.open(IDB_NAME, 1); r.onupgradeneeded = e => e.target.result.createObjectStore(IDB_STORE); r.onsuccess = e => res(e.target.result); r.onerror = e => rej(e.target.error); }); }
+async function idbGetAll() { const db = await idbOpen(); return new Promise((res, rej) => { const r = db.transaction(IDB_STORE,'readonly').objectStore(IDB_STORE).getAll(); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+async function idbGet(k) { const db = await idbOpen(); return new Promise((res, rej) => { const r = db.transaction(IDB_STORE,'readonly').objectStore(IDB_STORE).get(k); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+async function idbPut(k, v) { const db = await idbOpen(); return new Promise((res, rej) => { const tx = db.transaction(IDB_STORE,'readwrite'); tx.objectStore(IDB_STORE).put(v, k); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); }
+async function idbDel(k) { const db = await idbOpen(); return new Promise((res, rej) => { const tx = db.transaction(IDB_STORE,'readwrite'); tx.objectStore(IDB_STORE).delete(k); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); }
+
+
+// ── Folder tree helpers ──
+function flattenFolders(tree, depth = 0) {
+  let flat = [];
+  (tree || []).forEach(f => {
+    flat.push({ id: f.id, name: f.name, video_count: f.video_count, parent_id: f.parent_id, depth });
+    if (f.children && f.children.length) flat = flat.concat(flattenFolders(f.children, depth + 1));
+  });
+  return flat;
+}
+
+// ── Mobile Library Panel ──
+function toggleLibraryPanel() {
+  const p = $('#libraryPanel');
+  if (p.classList.contains('hidden')) {
+    p.classList.replace('hidden', 'flex');
+    renderLibraryPanel();
+    requestAnimationFrame(() => p.classList.remove('translate-y-full'));
+  } else {
+    p.classList.add('translate-y-full');
+    setTimeout(() => p.classList.replace('flex', 'hidden'), 300);
+  }
+}
+function selectFolder(id) {
+  state.folder = id || null;
+  state.page = 1; // vidme-paging
+  if (_pageParam()) history.replaceState({}, '', pageUrl(null));
+  if (state.folder === 'null') $('#heading').textContent = 'Uncategorized';
+  else if (state.folder === '__portrait__') $('#heading').textContent = 'Portrait';
+  else if (state.folder === '__landscape__') $('#heading').textContent = 'Landscape';
+  else {
+    const folder = state.folders.find(f => f.id === id);
+    $('#heading').textContent = folder ? folder.name : 'All videos';
+  }
+  if (state.folder === '__portrait__') {
+    history.pushState({}, '', '/library/portrait/'); // vidme-library
+  } else if (state.folder === '__landscape__') {
+    history.pushState({}, '', '/library/landscape/');
+  } else if (state.folder === 'null') {
+    history.pushState({}, '', '/library/uncategorized/');
+  } else if (state.folder && !state.folder.startsWith('__')) {
+    const _f = state.folders.find(f => f.id === state.folder);
+    history.pushState({}, '', '/' + slugify(_f ? _f.name : state.folder) + '/');
+  } else {
+    history.pushState({}, '', '/');
+  }
+  render();
+  requestAnimationFrame(() => window.scrollTo(0, 0));
+  toggleLibraryPanel();
+}
+function uncategorizedCount() {
+  return state.videos.filter(v => !v.folder_id).length;
+}
+function renderLibraryPanel() {
+  const totalCount = state.videos.length;
+  const uncCount = uncategorizedCount();
+  let html = `<button onclick="selectFolder('')" class="flex w-full items-center gap-3 px-4 py-3 hover:bg-slate-800 border-b border-slate-800">
+    <span class="material-symbols-outlined text-indigo-300">video_library</span>
+    <span class="flex-1 text-left font-medium">All Videos</span>
+    <span class="rounded-full bg-slate-700 px-2 py-0.5 text-xs">${totalCount}</span>
+  </button>`;
+  html += `<button onclick="selectFolder('null')" class="flex w-full items-center gap-3 px-4 py-3 hover:bg-slate-800 border-b border-slate-800">
+    <span class="material-symbols-outlined text-slate-400">folder_off</span>
+    <span class="flex-1 text-left">Uncategorized</span>
+    <span class="rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-300">${uncCount}</span>
+  </button>`;
+  const portraitCount = state.videos.filter(v => v.is_portrait).length;
+  html += `<button onclick="selectFolder('__portrait__')" class="flex w-full items-center gap-3 px-4 py-3 hover:bg-slate-800 border-b border-slate-800">
+    <span class="material-symbols-outlined text-indigo-300">stay_current_portrait</span>
+    <span class="flex-1 text-left">Portrait</span>
+    <span class="rounded-full bg-slate-700 px-2 py-0.5 text-xs">${portraitCount}</span>
+  </button>`;
+  html += `<button onclick="selectFolder('__landscape__')" class="flex w-full items-center gap-3 px-4 py-3 hover:bg-slate-800 border-b border-slate-800">
+    <span class="material-symbols-outlined text-indigo-300">stay_current_landscape</span>
+    <span class="flex-1 text-left">Landscape</span>
+    <span class="rounded-full bg-slate-700 px-2 py-0.5 text-xs">${state.videos.length - portraitCount}</span>
+  </button>`;
+  function renderItem(f, depth) {
+    const icon = depth > 0 ? 'subdirectory_arrow_right' : 'folder';
+    const pad = 16 + depth * 20;
+    let h = `<div class="flex w-full items-center border-b border-slate-800 hover:bg-slate-800" style="padding-left:${pad}px">
+      <button onclick="selectFolder('${f.id}')" class="flex flex-1 items-center gap-3 py-3 px-4 text-left">
+        <span class="material-symbols-outlined text-slate-400">${icon}</span>
+        <span class="flex-1">${esc(f.name)}</span>
+        <span class="rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-300">${f.video_count}</span>
+      </button>
+      <button onclick="event.stopPropagation();showCtxMenu(event,'${f.id}')" class="px-3 py-2 text-slate-500 hover:text-slate-200"><span class="material-symbols-outlined" style="font-size:18px">more_vert</span></button>
+    </div>`;
+    if (f.children) h += f.children.map(c => renderItem(c, depth + 1)).join('');
+    return h;
+  }
+  html += (state.folderTree || []).map(f => renderItem(f, 0)).join('');
+  $('#libraryList').innerHTML = html;
+}
+
+// ── Folder context menu + actions ──
+function showCtxMenu(e, folderId) {
+  const menu = $('#ctxMenu');
+  const folder = state.folders.find(f => f.id === folderId);
+  if (!folder) return;
+  menu.innerHTML = `
+    <button class="ctx-item flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-slate-800" onclick="renameFolder('${folderId}')"><span class="material-symbols-outlined" style="font-size:18px">edit</span>Rename</button>
+    <button class="ctx-item flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-slate-800" onclick="moveFolder('${folderId}')"><span class="material-symbols-outlined" style="font-size:18px">drive_file_move</span>Move to folder</button>
+    <div class="my-1 border-t border-slate-700"></div>
+    <button class="ctx-item flex items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:bg-slate-800" onclick="deleteFolder('${folderId}')"><span class="material-symbols-outlined" style="font-size:18px">delete</span>Delete</button>`;
+  menu.style.left = Math.min(e.clientX, window.innerWidth - 180) + 'px';
+  menu.style.top = Math.min(e.clientY, window.innerHeight - 160) + 'px';
+  menu.classList.remove('hidden');
+}
+document.addEventListener('click', () => $('#ctxMenu').classList.add('hidden'));
+$('#ctxMenu').addEventListener('click', e => e.stopPropagation());
+
+async function renameFolder(id) {
+  const folder = state.folders.find(f => f.id === id);
+  if (!folder) return;
+  const name = await showPrompt('Rename folder', 'Folder name');
+  if (!name || name === folder.name) return;
+  await api(`/api/folders/${id}`, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name }) });
+  toast(`Folder renamed to "${name}"`, 'success');
+  await load();
+}
+
+async function moveFolder(id) {
+  const folder = state.folders.find(f => f.id === id);
+  if (!folder) return;
+  const targetId = await showFolderPicker('Move folder to');
+  if (targetId === undefined) return;
+  await api(`/api/folders/${id}`, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ parent_id: targetId || null }) });
+  toast(`Folder moved`, 'success');
+  await load();
+}
+
+async function deleteFolder(id) {
+  const folder = state.folders.find(f => f.id === id);
+  if (!folder) return;
+  const hasVideos = folder.video_count > 0;
+  const hasChildren = state.folders.some(f => f.parent_id === id);
+  let url = `/api/folders/${id}`;
+  if (hasVideos || hasChildren) {
+    const parts = [];
+    if (hasVideos) parts.push(`${folder.video_count} video${folder.video_count===1?'':'s'}`);
+    if (hasChildren) parts.push('subfolders');
+    const ok = await showConfirm('Delete folder', `"${folder.name}" has ${parts.join(' and ')}.\n\nClick Delete to move them to Uncategorized, or Cancel to abort.`);
+    if (!ok) return;
+    url += '?orphan_action=unassign';
+  }
+  await fetch(url, { method: 'DELETE' });
+  toast(`Folder "${folder.name}" deleted`, 'success');
+  if (state.folder === id) { state.folder = null; $('#heading').textContent = 'All videos'; }
+  await load();
+}
+
+// ── Toast system ──
+function toast(msg, type = 'info', duration = 4000) {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span style="flex:1">${msg}</span><button onclick="this.parentElement.remove()" style="opacity:.6;font-size:18px;line-height:1;background:none;border:none;color:inherit;cursor:pointer">&times;</button>`;
+  $('#toastContainer').appendChild(el);
+  requestAnimationFrame(() => { requestAnimationFrame(() => el.classList.add('show')); });
+  if (duration > 0) setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 300); }, duration);
+  return el;
+}
+
+function toastUpload(title) {
+  const el = document.createElement('div');
+  el.className = 'toast info';
+  el.style.flexDirection = 'column';
+  el.style.alignItems = 'stretch';
+  el.style.gap = '8px';
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px">
+      <div class="vidme-loader"></div>
+      <span style="flex:1;font-size:13px">Uploading <b>${esc(title)}</b></span>
+      <span class="upload-pct" style="font-size:12px;opacity:.7">0%</span>
+    </div>
+    <div class="vidme-bar-bg">
+      <div class="upload-bar vidme-bar">
+        <div class="vidme-bar-stripes">
+          <div class="vidme-bar-stripe"></div>
+          <div class="vidme-bar-stripe"></div>
+          <div class="vidme-bar-stripe"></div>
+        </div>
+      </div>
+    </div>`;
+  $('#toastContainer').appendChild(el);
+  requestAnimationFrame(() => { requestAnimationFrame(() => el.classList.add('show')); });
+  return {
+    progress(pct) {
+      el.querySelector('.upload-bar').style.width = pct + '%';
+      el.querySelector('.upload-pct').textContent = Math.round(pct) + '%';
+    },
+    done(ok, msg) {
+      el.remove();
+      toast(ok ? `✓ ${msg}` : `✗ ${msg}`, ok ? 'success' : 'error', ok ? 4000 : 6000);
+    }
+  };
+}
+
+// ── Custom prompt ──
+function showPrompt(title, placeholder = '') {
+  return new Promise(resolve => {
+    $('#promptTitle').textContent = title;
+    $('#promptInput').placeholder = placeholder;
+    $('#promptInput').value = '';
+    $('#promptModal').classList.replace('hidden', 'flex');
+    setTimeout(() => $('#promptInput').focus(), 50);
+    const cleanup = val => { $('#promptModal').classList.replace('flex', 'hidden'); resolve(val); };
+    $('#promptOk').onclick = () => cleanup($('#promptInput').value.trim() || null);
+    $('#promptCancel').onclick = () => cleanup(null);
+    $('#promptInput').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); cleanup($('#promptInput').value.trim() || null); } if (e.key === 'Escape') cleanup(null); };
+  });
+}
+
+// ── Custom confirm ──
+function showConfirm(title, msg) {
+  return new Promise(resolve => {
+    $('#confirmTitle').textContent = title;
+    $('#confirmMsg').textContent = msg;
+    $('#confirmModal').classList.replace('hidden', 'flex');
+    const cleanup = val => { $('#confirmModal').classList.replace('flex', 'hidden'); resolve(val); };
+    $('#confirmOk').onclick = () => cleanup(true);
+    $('#confirmCancel').onclick = () => cleanup(false);
+  });
+}
+
+// ── Folder picker ──
+function showFolderPicker(title) {
+  return new Promise(resolve => {
+    $('#folderPickerTitle').textContent = title;
+    const list = $('#folderPickerList');
+    list.innerHTML = '<button data-fid="" class="fp-opt w-full text-left px-3 py-2 rounded-lg hover:bg-slate-700 text-sm">No folder</button>' +
+      state.folders.map(f => `<button data-fid="${f.id}" class="fp-opt w-full text-left px-3 py-2 rounded-lg hover:bg-slate-700 text-sm" style="padding-left:${12 + (f.depth||0) * 16}px">${'— '.repeat(f.depth||0)}${esc(f.name)}</button>`).join('');
+    $('#folderPickerModal').classList.replace('hidden', 'flex');
+    const cleanup = val => { $('#folderPickerModal').classList.replace('flex', 'hidden'); resolve(val); };
+    document.querySelectorAll('.fp-opt').forEach(b => b.onclick = () => cleanup(b.dataset.fid || null));
+    $('#folderPickerCancel').onclick = () => cleanup(undefined);
+  });
+}
+
+function openModal() {
+  const card = $('#uploadForm');
+  card.style.top = '50%';
+  card.style.left = '50%';
+  card.style.transform = 'translate(-50%, -50%)';
+  $('#modal').style.display = 'block';
+}
+function closeModal() {
+  $('#modal').style.display = 'none';
+  $('#uploadForm').reset();
+  $('#fileName').textContent = 'Drop a video here or click to browse';
+}
+// ── Draggable upload modal ──
+(function() {
+  const card = document.getElementById('uploadForm');
+  const header = document.getElementById('modalHeader');
+  const overlay = document.getElementById('modal');
+  let dragging = false, sx, sy, sl, st;
+  // Close on backdrop click
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+  function start(clientX, clientY) {
+    dragging = true;
+    const rect = card.getBoundingClientRect();
+    card.style.transform = 'none';
+    sl = rect.left; st = rect.top;
+    card.style.left = sl + 'px';
+    card.style.top = st + 'px';
+    sx = clientX; sy = clientY;
+  }
+  function move(clientX, clientY) {
+    if (!dragging) return;
+    let nl = sl + (clientX - sx), nt = st + (clientY - sy);
+    const cw = card.offsetWidth, ch = card.offsetHeight;
+    nl = Math.max(0, Math.min(nl, window.innerWidth - cw));
+    nt = Math.max(0, Math.min(nt, window.innerHeight - ch));
+    card.style.left = nl + 'px';
+    card.style.top = nt + 'px';
+  }
+  function end() { dragging = false; }
+  header.addEventListener('mousedown', e => { start(e.clientX, e.clientY); e.preventDefault(); });
+  document.addEventListener('mousemove', e => move(e.clientX, e.clientY));
+  document.addEventListener('mouseup', end);
+  header.addEventListener('touchstart', e => { const t = e.touches[0]; start(t.clientX, t.clientY); }, { passive: true });
+  document.addEventListener('touchmove', e => { if (dragging) { e.preventDefault(); const t = e.touches[0]; move(t.clientX, t.clientY); } }, { passive: false });
+  document.addEventListener('touchend', end);
+})();
+
+// ── Mobile Upload Center ──
+function toggleUploadCenter() {
+  const p = $('#uploadCenter');
+  if (p.classList.contains('hidden')) {
+    p.classList.replace('hidden', 'flex');
+    renderUploadCenter();
+    requestAnimationFrame(() => p.style.transform = 'translateY(0)');
+  } else {
+    p.style.transform = 'translateY(100%)';
+    setTimeout(() => p.classList.replace('flex', 'hidden'), 300);
+  }
+}
+function updateUploadBadge() {
+  const active = state.uploads.filter(u => u.status === 'uploading').length;
+  for (const id of ['uploadBadge', 'uploadBadgeDesktop']) {
+    const badge = $('#' + id);
+    if (!badge) continue;
+    if (active > 0) { badge.textContent = active; badge.classList.remove('hidden'); }
+    else badge.classList.add('hidden');
+  }
+}
+// ETA + speed: dari speed EMA (bytes/sec) yang dikirim SW; fallback hitung dari bytesSent/waktu lokal
+function fmtEta(sec) {
+  if (!isFinite(sec) || sec <= 0) return '';
+  sec = Math.round(sec);
+  if (sec < 60) return sec + 's';
+  if (sec < 3600) return Math.floor(sec/60) + 'm ' + String(sec%60).padStart(2,'0') + 's';
+  return Math.floor(sec/3600) + 'h ' + String(Math.floor((sec%3600)/60)).padStart(2,'0') + 'm';
+}
+// 19-09-26 (Opsi 2): chunk tetap 4MB, tapi ETA di-interpolasi tiap detik.
+// Anchor: (a) bytesSent dari SW = benar tapi hanya di akhir chunk (~16s @2Mbps);
+// (b) selama menunggu, "sent" = anchorSent + speed*(elapsed) — angka estimasi yang
+// dikoreksi begitu chunk berikutnya landing. Pola sama dipakai FileBrowser/Seafile
+// (hitung kecepatan dari delta, tampilkan di interval tetap) — bedanya mereka punya
+// XHR upload.onprogress, kita tidak (fetch di SW tanpa event progress).
+function etaHtml(u) {
+  const anchorSent = u.bytesSent ?? 0, total = u.bytesTotal ?? 0;
+  if (!total || !anchorSent || anchorSent >= total) return '';
+  const now = Date.now();
+  const spd = u.speed || 0;                     // bytes/sec dari SW (EMA, di-update per chunk)
+  if (!spd) return '';
+  // interpolasi: anchor terakhir + kecepatan x waktu berjalan sejak anchor
+  const dt = u._anchorAt ? (now - u._anchorAt) / 1000 : 0;
+  let shown = Math.min(anchorSent + spd * dt, total);
+  const eta = (total - shown) / spd;
+  const mbs = (spd / 1048576).toFixed(2);
+  return ` &bull; ${mbs} MB/s &bull; ETA ${fmtEta(eta)}`;
+}
+// 19-09-26 (FileBrowser pattern): SW broadcasts ~10-20x/s on slow links; repainting
+// the panel that often wastes main-thread time and starves the hover preview.
+// Mark dirty and let a 1s tick repaint; while any upload is active the tick keeps
+// running so the INTERPOLATED ETA advances even between 4MB chunks (~16s @2Mbps).
+let _ucDirty = false, _ucTimer = null;
+function markUploadsDirty() {
+  _ucDirty = true;
+  if (_ucTimer) return;
+  _ucTimer = setInterval(() => {
+    const hasActive = state.uploads.some(u => u.status === 'uploading');
+    if (!_ucDirty && !hasActive) { clearInterval(_ucTimer); _ucTimer = null; return; }
+    _ucDirty = false;
+    renderUploadCenter();
+  }, 1000);
+}
+function renderUploadCenter() {
+  const active = state.uploads.filter(u => u.status === 'uploading');
+  const queued = state.uploads.filter(u => u.status === 'queued'); // vidme-mupload
+  const done = state.uploads.filter(u => u.status !== 'uploading' && u.status !== 'queued');
+  $('#ucActiveBadge').textContent = active.length;
+  updateUploadBadge();
+  let html = '';
+  if (active.length) {
+    html += '<h3 class="mb-2 text-xs font-semibold uppercase tracking-widest text-slate-500">Active</h3>';
+    html += active.map(u => `
+      <div class="mb-3 rounded-xl bg-[#171f33] p-3">
+        <div class="flex items-center gap-2">
+          <div class="vidme-loader"></div>
+          <span class="flex-1 truncate text-sm font-medium">${esc(u.title)}</span>
+          <button onclick="cancelUpload('${u.id}')" class="text-red-400 hover:text-red-300"><span class="material-symbols-outlined" style="font-size:18px">cancel</span></button>
+        </div>
+        <div class="vidme-bar-bg mt-2">
+          <div class="vidme-bar" style="width:${u.progress}%">
+            <div class="vidme-bar-stripes">
+              <div class="vidme-bar-stripe"></div>
+              <div class="vidme-bar-stripe"></div>
+              <div class="vidme-bar-stripe"></div>
+            </div>
+          </div>
+        </div>
+        <p class="text-xs text-slate-500 mt-1">${u.bytesTotal ? ((u.bytesSent??0)/1048576).toFixed(1) + ' / ' + (u.bytesTotal/1048576).toFixed(1) + ' MB &bull; ' : ''}${Math.round(u.progress)}%${etaHtml(u)}</p>
+      </div>`).join('');
+  }
+  if (done.length) {
+    html += '<div class="mb-2 mt-4 flex items-center justify-between"><h3 class="text-xs font-semibold uppercase tracking-widest text-slate-500">History</h3><button onclick="clearUploadHistory()" class="text-xs text-slate-400 hover:text-red-400">Clear history</button></div>';
+    html += done.slice().reverse().map(u => {
+      const ok = u.status === 'done';
+      const icon = ok ? 'check_circle' : 'error';
+      const color = ok ? 'text-green-400' : 'text-red-400';
+      const ts = u.timestamp ? new Date(u.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
+      return `
+        <div class="flex items-center gap-2 py-2 border-b border-slate-800">
+          <span class="material-symbols-outlined ${color}" style="font-size:18px">${icon}</span>
+          <span class="flex-1 truncate text-sm">${esc(u.title)}</span>
+          <span class="text-xs text-slate-500">${ts}</span>
+        </div>`;
+    }).join('');
+  }
+  if (queued.length) { // vidme-mupload: antrian nunggu slot
+    html += '<h3 class="mb-2 mt-4 text-xs font-semibold uppercase tracking-widest text-slate-500">Menunggu</h3>';
+    html += queued.map(u => `
+      <div class="mb-3 rounded-xl bg-[#171f33] p-3">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-slate-500" style="font-size:18px">hourglass_empty</span>
+          <span class="flex-1 truncate text-sm font-medium text-slate-400">${esc(u.title)}</span>
+          <button onclick="cancelUpload('${u.id}')" class="text-red-400 hover:text-red-300"><span class="material-symbols-outlined" style="font-size:18px">cancel</span></button>
+        </div>
+        <p class="text-xs text-slate-600 mt-1">Menunggu slot upload&hellip;</p>
+      </div>`).join('');
+  }
+  if (!active.length && !done.length && !queued.length) {
+    html = '<div class="flex flex-col items-center justify-center py-16 text-slate-500"><span class="material-symbols-outlined mb-2" style="font-size:48px">cloud_upload</span><p>No uploads yet</p></div>';
+  }
+  $('#uploadCenterBody').innerHTML = html;
+}
+function cancelUpload(id) { // vidme-mupload: queued = keluar antrian; aktif = cancel SW seperti biasa
+  const u = state.uploads.find(x => x.id === id);
+  if (!u) return;
+  if (u.status === 'queued') {
+    uploadQueue = uploadQueue.filter(x => x !== id);
+    _idbQueue = _idbQueue.filter(r => r.uploadId !== id);
+    u.status = 'cancelled'; u.timestamp = Date.now(); renderUploadCenter();
+    idbDel(id).catch(()=>{});
+    return;
+  }
+  navigator.serviceWorker?.controller?.postMessage({ type: 'sw-upload-cancel', uploadId: id }); u.status = 'cancelled'; u.timestamp = Date.now(); renderUploadCenter();
+}
+function clearUploadHistory() {
+  state.uploads = state.uploads.filter(u => u.status === 'uploading');
+  renderUploadCenter();
+}
+
+// ── Select mode ──
+function setSelectMode(on) {
+  state.selectMode = on;
+  const cb = document.getElementById('selectCheckbox');
+  if (cb) cb.checked = on;
+  state.selected.clear();
+  $('#selectBar').classList.toggle('hidden', !on);
+  $('#selectBar').classList.toggle('flex', on);
+  $('#bottomNav').classList.toggle('hidden', on);
+  $('#selectToggle').classList.toggle('border-indigo-400', on);
+  $('#selectToggle').classList.toggle('text-indigo-300', on);
+  $('#actionsMenu').classList.add('hidden');
+  render();
+}
+function updateSelBar() {
+  const n = state.selected.size;
+  $('#selCount').textContent = `${n} selected`;
+  $('#selActionsLabel').textContent = n ? `Actions (${n})` : 'Actions';
+  $('#selActionsBtn').disabled = n === 0;
+}
+document.getElementById('selectCheckbox').addEventListener('change', function() {
+  setSelectMode(this.checked);
+});
+$('#selCancel').onclick = () => setSelectMode(false);
+$('#selAll').onclick = () => {
+  const q = $('#search').value.toLowerCase();
+  const isVirtual2 = s => (state.folder === '__portrait__' || state.folder === '__landscape__');
+  const folderFilter = state.folder === 'null' ? v => !v.folder_id
+    : isVirtual2() && state.folder === '__portrait__' ? v => v.is_portrait === 1
+    : isVirtual2() && state.folder === '__landscape__' ? v => v.is_portrait === 0
+    : state.folder ? v => v.folder_id === state.folder
+    : () => true;
+  const visible = state.videos.filter(v => folderFilter(v) && v.title.toLowerCase().includes(q));
+  visible.forEach(v => state.selected.add(v.id));
+  updateSelBar(); render();
+};
+$('#selNone').onclick = () => { state.selected.clear(); updateSelBar(); render(); };
+
+// Actions dropdown toggle
+$('#selActionsBtn').onclick = (e) => {
+  e.stopPropagation();
+  $('#actionsMenu').classList.toggle('hidden');
+};
+document.addEventListener('click', () => $('#actionsMenu').classList.add('hidden'));
+
+// ── Actions handlers ──
+$('#actDelete').onclick = async () => {
+  $('#actionsMenu').classList.add('hidden');
+  const n = state.selected.size;
+  if (!n) return;
+  const ok = await showConfirm('Delete videos', `Delete ${n} video${n===1?'':' s'}? This cannot be undone.`);
+  if (!ok) return;
+  await Promise.all([...state.selected].map(id => fetch(`/api/videos/${encodeURIComponent(id)}`, { method: 'DELETE' })));
+  toast(`Deleted ${n} video${n===1?'':'s'}`, 'success');
+  setSelectMode(false);
+  await load();
+};
+
+$('#actPin').onclick = async () => {
+  $('#actionsMenu').classList.add('hidden');
+  const ids = [...state.selected];
+  await Promise.all(ids.map(id => {
+    const v = state.videos.find(x => x.id === id);
+    if (v && !v.is_pinned) return fetch(`/api/videos/${id}/pin`, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ is_pinned: true }) });
+  }));
+  toast(`Pinned ${ids.length} video${ids.length===1?'':'s'}`, 'success');
+  setSelectMode(false);
+  await load();
+};
+
+$('#actUnpin').onclick = async () => {
+  $('#actionsMenu').classList.add('hidden');
+  const ids = [...state.selected];
+  await Promise.all(ids.map(id => {
+    const v = state.videos.find(x => x.id === id);
+    if (v && v.is_pinned) return fetch(`/api/videos/${id}/pin`, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ is_pinned: false }) });
+  }));
+  toast(`Unpinned ${ids.length} video${ids.length===1?'':'s'}`, 'success');
+  setSelectMode(false);
+  await load();
+};
+
+$('#actCopy').onclick = async () => {
+  $('#actionsMenu').classList.add('hidden');
+  const folderId = await showFolderPicker('Copy to folder');
+  if (folderId === undefined) return;
+  const ids = [...state.selected];
+  await Promise.all(ids.map(id => api(`/api/videos/${id}`, {
+    method: 'PATCH',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ folder_id: folderId || null })
+  })));
+  toast(`Copied ${ids.length} video${ids.length===1?'':'s'} to folder`, 'success');
+  setSelectMode(false);
+  await load();
+};
+
+$('#actMove').onclick = async () => {
+  $('#actionsMenu').classList.add('hidden');
+  const folderId = await showFolderPicker('Move to folder');
+  if (folderId === undefined) return;
+  const ids = [...state.selected];
+  await Promise.all(ids.map(id => api(`/api/videos/${id}`, {
+    method: 'PATCH',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ folder_id: folderId || null })
+  })));
+  toast(`Moved ${ids.length} video${ids.length===1?'':'s'} to folder`, 'success');
+  setSelectMode(false);
+  await load();
+};
+
+$('#actDownload').onclick = async () => {
+  $('#actionsMenu').classList.add('hidden');
+  const selectedIds = [...state.selected];
+  if (!selectedIds.length) return;
+  try {
+    const r = await fetch('/api/videos/bulk-download', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ ids: selectedIds }) });
+    if (!r.ok) throw Error(r.status);
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = Object.assign(document.createElement('a'), { href: url, download: 'vidme-export.zip' });
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    toast(`Downloading ${selectedIds.length} video${selectedIds.length===1?'':'s'} as ZIP`, 'success');
+  } catch {
+    toast('ZIP download failed', 'error');
+    return;
+  }
+  setSelectMode(false);
+};
+
+function toggleSelect(id, e) {
+  e.stopPropagation();
+  if (state.selected.has(id)) state.selected.delete(id); else state.selected.add(id);
+  updateSelBar(); render();
+}
+
+// ── Card rendering ──
+function fmt(n) { const h = Math.floor(n/3600); const m = Math.floor((n%3600)/60); const s = Math.floor(n%60); return h ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` : `${m}:${String(s).padStart(2,'0')}`; }
+function card(v) {
+  const sel = state.selected.has(v.id);
+  const selAttr = state.selectMode ? 'select-mode' : '';
+  const selClass = sel ? 'selected' : '';
+  if (v.status === 'processing') return `
+    <article data-id="${v.id}" data-duration="${v.duration || ''}" data-portrait="${!!v.is_portrait}" class="video-card ${selAttr} ${selClass} rounded-xl bg-[#171f33] p-3 relative">
+      <div class="card-check hidden absolute top-2 left-2 z-10 w-6 h-6 rounded-full border-2 border-indigo-400 bg-indigo-500 items-center justify-center cursor-pointer" onclick="toggleSelect('${v.id}',event)">
+        ${sel ? '<span class="material-symbols-outlined text-white" style="font-size:14px">check</span>' : ''}
+      </div>
+      <div class="flex aspect-video items-center justify-center rounded-lg bg-slate-800">
+        <span class="material-symbols-outlined animate-spin text-indigo-400">progress_activity</span>
+      </div>
+      <p class="mt-3 truncate font-semibold">${esc(v.title)}</p>
+      <p class="text-sm text-slate-500">Processing…</p>
+    </article>`;
+  const portrait = !!v.is_portrait;
+  const pinIcon = v.is_pinned ? '<span class="material-symbols-outlined text-indigo-300" style="font-size:16px">push_pin</span>' : '';
+  return `
+    <article data-id="${v.id}" data-duration="${v.duration || ''}" data-portrait="${!!v.is_portrait}" data-folder-id="${v.folder_id||''}" ${v.has_microclip ? `data-clip="${v.id}"` : ''} onclick="${state.selectMode ? `toggleSelect('${v.id}',event)` : `openVideo('${v.id}','${v.folder_id||''}')`}"
+      class="video-card ${selAttr} ${selClass} group cursor-pointer rounded-xl bg-[#171f33] p-3 transition hover:-translate-y-1 hover:bg-[#202a43] relative">
+      <div class="card-check hidden absolute top-2 left-2 z-10 w-6 h-6 rounded-full border-2 border-indigo-400 ${sel?'bg-indigo-500':'bg-black/60'} items-center justify-center cursor-pointer">
+        ${sel ? '<span class="material-symbols-outlined text-white" style="font-size:14px">check</span>' : ''}
+      </div>
+      <div class="relative aspect-video overflow-hidden rounded-lg bg-slate-800">
+        ${v.status==='ready'?`<img loading="lazy" class="h-full w-full object-cover" src="/storyboard/${v.id}?v=${v.has_storyboard||0}" onerror="this.onerror=null;this.src='/thumb/${v.id}'" alt="">`:''} 
+        <span class="absolute bottom-2 left-2 rounded bg-black/70 px-2 py-1 text-xs">${v.duration?fmt(v.duration):''}</span>
+        ${pinIcon ? `<span class="absolute top-2 right-2">${pinIcon}</span>` : ''}
+      </div>
+      <p class="mt-3 truncate font-semibold">${esc(v.title)}</p>
+      <p class="text-xs text-slate-500">${new Date(v.created_at).toLocaleDateString()}</p>
+    </article>`;
+}
+
+// hover preview: digabung ke satu engine "Unified hover/tap preview" (bawah file)
+
+function renderFolders() {
+  // Desktop sidebar: recursive tree with indentation + video_count badges
+  let sidebar = '<button data-folder="" class="folder flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-indigo-300 hover:bg-slate-800"><span class="material-symbols-outlined">video_library</span>All videos</button>';
+  sidebar += `<button data-folder="null" class="folder flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-slate-400 hover:bg-slate-800"><span class="material-symbols-outlined">folder_off</span>Uncategorized<span class="ml-auto text-xs text-slate-500">${uncategorizedCount()}</span></button>`;
+  const portraitCount = state.videos.filter(v => v.is_portrait).length;
+  sidebar += `<button data-folder="__portrait__" class="folder flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-slate-400 hover:bg-slate-800"><span class="material-symbols-outlined">stay_current_portrait</span>Portrait<span class="ml-auto text-xs text-slate-500">${portraitCount}</span></button>`;
+  sidebar += `<button data-folder="__landscape__" class="folder flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-slate-400 hover:bg-slate-800"><span class="material-symbols-outlined">stay_current_landscape</span>Landscape<span class="ml-auto text-xs text-slate-500">${state.videos.length - portraitCount}</span></button>`;
+  function renderTree(tree, depth) {
+    tree.forEach(f => {
+      const icon = depth > 0 ? 'subdirectory_arrow_right' : 'folder';
+      const pad = 12 + depth * 20;
+      sidebar += `<div class="flex items-center rounded-lg hover:bg-slate-800" style="padding-left:${pad}px">
+        <button data-folder="${f.id}" class="folder flex flex-1 items-center gap-3 py-2 px-3 text-left text-slate-400"><span class="material-symbols-outlined">${icon}</span>${esc(f.name)}${f.video_count ? `<span class="ml-auto text-xs text-slate-500">${f.video_count}</span>` : ''}</button>
+        <button onclick="event.stopPropagation();showCtxMenu(event,'${f.id}')" class="px-2 py-2 text-slate-500 hover:text-slate-200"><span class="material-symbols-outlined" style="font-size:18px">more_vert</span></button>
+      </div>`;
+    });
+  }
+  renderTree(state.folderTree, 0);
+  $('#folders').innerHTML = sidebar;
+  // Upload modal dropdown: flat with indentation prefix
+  $('#folderSelect').innerHTML = '<option value="">No folder</option>' + state.folders.map(f => `<option value="${f.id}">${'\u2014 '.repeat(f.depth)}${esc(f.name)}</option>`).join('');
+  document.querySelectorAll('.folder').forEach(b => b.onclick = () => {
+    state.folder = b.dataset.folder || null;
+    if (state.folder === 'null') $('#heading').textContent = 'Uncategorized';
+    else if (state.folder === '__portrait__') $('#heading').textContent = 'Portrait';
+    else if (state.folder === '__landscape__') $('#heading').textContent = 'Landscape';
+    else {
+      const folder = state.folders.find(f => f.id === b.dataset.folder);
+      $('#heading').textContent = folder ? folder.name : 'All videos';
+    }
+    // Update URL
+    if (state.folder === '__portrait__') {
+    history.pushState({}, '', '/library/portrait/'); // vidme-library
+  } else if (state.folder === '__landscape__') {
+    history.pushState({}, '', '/library/landscape/');
+  } else if (state.folder === 'null') {
+    history.pushState({}, '', '/library/uncategorized/');
+  } else if (state.folder && !state.folder.startsWith('__')) {
+    const _f = state.folders.find(f => f.id === state.folder);
+    history.pushState({}, '', '/' + slugify(_f ? _f.name : state.folder) + '/');
+  } else {
+    history.pushState({}, '', '/');
+  }
+    _suppressScrollRestore = true; // vidme-v2.3.1-scroll: folder click = HARUS ke-atas
+    render();
+    _suppressScrollRestore = false;
+    requestAnimationFrame(() => window.scrollTo(0, 0)); // vidme-scroll: dinetralkan utk path virtual (lihat F15)
+  });
+}
+
+// vidme-scroll F15: path virtual via sidebar — setelah render, kembalikan scroll dari sessionStorage
+(function () {
+  const _restoreV = () => {
+    const p = location.pathname.split('/').filter(Boolean);
+    if (p[0] === 'library') {
+      requestAnimationFrame(() => {
+        try { window.scrollTo(0, parseInt(sessionStorage.getItem('vidme-scroll:' + (Router._lastBrowseKey || 'home')) || '0', 10) || 0); } catch (e) {}
+      });
+    }
+  };
+  const _origRender = render;
+  render = function (...a) {
+    const r = _origRender.apply(this, a);
+    _restoreV();
+    return r;
+  };
+  // Lacak scroll saat browse library aktif — delete video di tengah list balik ke posisi TERKINI
+  let _tick = false;
+  window.addEventListener('scroll', () => {
+    if (_tick) return;
+    _tick = true;
+    requestAnimationFrame(() => {
+      _tick = false;
+      try {
+        const bv = document.getElementById('view-browse'); // vidme-v2.2: track SEMUA path browse, bukan cuma library
+        if (bv && bv.style.display !== 'none') {
+          sessionStorage.setItem('vidme-scroll:' + (Router._lastBrowseKey || 'home'), String(window.scrollY));
+        }
+      } catch (e) {}
+    });
+  }, { passive: true });
+})();
+
+let _suppressScrollRestore = false; // vidme-v2.3.1-scroll: true saat navigasi yang HARUS ke-atas (folder click, search)
+
+function render() {
+  // vidme-v2.3.1-scroll: preserve scroll position saat render() rebuild DOM (SSE/reconnect/poll)
+  // JANGAN preserve saat user navigasi (folder click, search) — itu memang harus ke-atas
+  const _preserveScroll = Router.currentView === 'browse' && !_suppressScrollRestore && !$('#search').value;
+  const _savedScrollY = _preserveScroll ? window.scrollY : null;
+
+  const q = $('#search').value.toLowerCase();
+  // Tombol X clear: tampil hanya saat ada teks
+  document.querySelectorAll('.search-clear').forEach(b => { b.style.display = q ? 'flex' : 'none'; });
+  const isVirtual = s => (state.folder === '__portrait__' || state.folder === '__landscape__');
+  const folderFilter = state.folder === 'null' ? v => !v.folder_id
+    : isVirtual() && state.folder === '__portrait__' ? v => v.is_portrait === 1
+    : isVirtual() && state.folder === '__landscape__' ? v => v.is_portrait === 0
+    : state.folder ? v => v.folder_id === state.folder
+    : () => true;
+  const vs = state.videos.filter(v => folderFilter(v) && v.title.toLowerCase().includes(q));
+  // vidme-paging: pageMode = Home utama + ?page=N -> flat 16 card; home-landing = Pinned+hero+Suggested+Explore;
+  // search & folder = behavior lama (full-list, tanpa paging)
+  const _urlPage = _pageParam();
+  const pageMode = !state.folder && !q && _urlPage !== null;
+  state.page = pageMode ? _urlPage : 1;
+  const _isHomeLanding = !state.folder && !q && !pageMode;
+  if (pageMode) {
+    const _tp = Math.max(1, Math.ceil(vs.length / PAGE_SIZE));
+    clampPage(_tp);
+  }
+  $('#count').textContent = `${vs.length} video${vs.length === 1 ? '' : 's'}`;
+  $('#empty').classList.toggle('hidden', vs.length > 0);
+  const pinned    = pageMode ? [] : vs.filter(v => v.is_pinned);
+  const portrait  = (pageMode || _isHomeLanding) ? [] : vs.filter(v => !v.is_pinned && v.is_portrait);
+  const landscape = (pageMode || _isHomeLanding) ? [] : vs.filter(v => !v.is_pinned && !v.is_portrait);
+  let html = '';
+  if (pinned.length) {
+    const mixed_p = pinned.filter(v => v.is_portrait);
+    const mixed_l = pinned.filter(v => !v.is_portrait);
+    html += `<section>
+      <h3 class="mb-3 font-heading text-lg flex items-center gap-2"><span class="material-symbols-outlined text-indigo-300" style="font-size:18px">push_pin</span>Pinned</h3>
+      <div class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">${mixed_p.map(card).join('')}</div>
+      ${mixed_l.length ? `<div class="mt-4 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">${mixed_l.map(card).join('')}</div>` : ''}
+    </section>`;
+  }
+  // Recent Uploads: HANYA di main view (All videos) TANPA query aktif — hidden di folder/virtual/search.
+  const isMainView = !state.folder && !q && !pageMode; // vidme-paging: hero HANYA home-landing
+  const recent = isMainView
+    ? vs.filter(v => !v.is_pinned && v.status === 'ready')
+        .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
+        .slice(0, 10)
+    : [];
+  if (recent.length) html += `<section>
+    <div class="mb-3 flex items-center justify-between">
+      <h3 class="font-heading text-lg">Recent Uploads</h3>
+    </div>
+    <div class="recent-slider">
+      <div class="recent-slides">${recent.map(card).join('')}</div>
+      <button type="button" id="recent-prev" class="recent-nav" aria-label="Sebelumnya"><span class="material-symbols-outlined" style="font-size:28px">chevron_left</span></button>
+      <button type="button" id="recent-next" class="recent-nav" aria-label="Berikutnya"><span class="material-symbols-outlined" style="font-size:28px">chevron_right</span></button>
+      <span id="recent-counter" class="recent-counter" aria-live="polite">1 / ${recent.length}</span>
+      <div id="recent-dots" class="recent-dots" aria-label="Pilih recent upload">${recent.map((_, i) => `<button type="button" class="recent-dot${i === 0 ? ' active' : ''}" data-index="${i}" aria-label="Slide ${i + 1}"></button>`).join('')}</div>
+    </div>
+  </section>`;
+  if (pageMode) { // vidme-paging: 16 card flat + pagination bar, TANPA pinned/hero/suggested
+    const _totalPages = Math.max(1, Math.ceil(vs.filter(v => !v.is_pinned).length / PAGE_SIZE)); // vidme-v27: total dari non-pinned
+    const pageVs = vs.filter(v => !v.is_pinned).slice((state.page - 1) * PAGE_SIZE, state.page * PAGE_SIZE); // vidme-v27: BUGFIX pinned cuma di home
+    html += `<section><h3 class="mb-3 font-heading text-lg">Semua video</h3><div class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">${pageVs.map(card).join('')}</div></section>`;
+    html += paginationBar(state.page, _totalPages);
+  } else if (isMainView) {
+    // vidme-suggested: 12 video acak, ganti tiap 6 jam (seed 6-hourly, keputusan user)
+    const sugg = suggestedVideos(vs);
+    if (sugg.length) html += `<section><h3 class="mb-3 font-heading text-lg flex items-center gap-2"><span class="material-symbols-outlined text-indigo-300" style="font-size:18px">auto_awesome</span>Suggested</h3><div class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 sugg-grid">${sugg.map(card).join('')}</div></section>`; // vidme-v27: sugg-grid class (12 mobile / 15 desktop)
+    // vidme-explore: bridge home -> /?page=1
+    html += `<div style="display:flex;justify-content:center;padding:28px 0 8px"><button class="button" id="exploreMoreBtn" type="button"><svg class="svgIcon" viewBox="0 0 512 512" height="1em" xmlns="http://www.w3.org/2000/svg"><path d="M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zm50.7-186.9L162.4 380.6c-19.4 7.5-38.5-11.6-31-31l55.5-144.3c3.3-8.5 9.9-15.1 18.4-18.4l144.3-55.5c19.4-7.5 38.5 11.6 31 31L325.1 306.7c-3.2 8.5-9.9 15.1-18.4 18.4zM288 256a32 32 0 1 0 -64 0 32 32 0 1 0 64 0z"></path></svg>Explore</button></div>`; // vidme-v27: explore v2 html
+  }
+  // vidme-v28: restore portrait/landscape sections (hilang sejak v2.6 refactor - search/folder/virtual kosong)
+  if (portrait.length)  html += `<section><h3 class="mb-3 font-heading text-lg">Portrait</h3><div class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">${portrait.map(card).join('')}</div></section>`;
+  if (landscape.length) html += `<section><h3 class="mb-3 font-heading text-lg">Landscape</h3><div class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">${landscape.map(card).join('')}</div></section>`;
+  // 19-09-26: rebuilding #videos destroys any hover-preview <video>; stop it first so
+  // the IIFE's activeVideo/activeCard refs never point at detached nodes.
+  if (typeof window.stopPreview === 'function') window.stopPreview();
+  $('#videos').innerHTML = html;
+  initRecentNav();
+  initPagination(); // vidme-paging
+  const _exp = document.getElementById('exploreMoreBtn'); // vidme-explore
+  if (_exp) _exp.onclick = () => { _suppressScrollRestore = true; Router.navigate(pageUrl(1)); requestAnimationFrame(() => window.scrollTo(0, 0)); };
+  if (state.selectMode) updateSelBar();
+
+  // vidme-v2.3.1-scroll: restore scroll setelah DOM rebuild
+  if (_savedScrollY !== null && _savedScrollY > 0) {
+    requestAnimationFrame(() => window.scrollTo(0, _savedScrollY));
+  }
+}
+
+// vidme-paging: bar [‹‹] 1 … cur±2 … N [››] + counter; CSS hand-written (tailwind subset tak punya kelasnya)
+function paginationBar(cur, total) { // vidme-v27: paginationBar w3-style ❮ 1 … N ❯
+  if (total <= 1) return '';
+  const set = new Set();
+  for (let p = 1; p <= Math.min(7, total); p++) set.add(p);
+  set.add(total);
+  [cur - 1, cur, cur + 1].forEach(p => { if (p >= 1 && p <= total) set.add(p); });
+  const pages = [...set].sort((a, b) => a - b);
+  let parts = [];
+  let prev = 0;
+  for (const p of pages) {
+    if (p - prev > 1) parts.push('<span class="pagination__item w3-button w3-text-gray">…</span>');
+    if (p === cur) parts.push(`<span class="pagination__item w3-button pagination-active nunito-700" data-page="${p}">${p}</span>`);
+    else parts.push(`<a class="w3-button nunito-400 pagination__item" data-page="${p}" href="${pageUrl(p)}">${p}</a>`);
+    prev = p;
+  }
+  const prevBtn = cur <= 1
+    ? `<span class="pagination__item pagination__item--previous-page w3-button w3-disabled pagination-disabled">❮</span>`
+    : `<a class="w3-button nunito-400 pagination__item pagination__item--previous-page" data-page="${cur - 1}" href="${pageUrl(cur - 1)}" rel="prev">❮</a>`;
+  const nextBtn = cur >= total
+    ? `<span class="pagination__item pagination__item--next-page w3-button w3-disabled pagination-disabled">❯</span>`
+    : `<a class="w3-button nunito-400 pagination__item pagination__item--next-page" data-page="${cur + 1}" href="${pageUrl(cur + 1)}" rel="next">❯</a>`;
+  return `<nav class="pagination-wrapper" data-total="${total}" aria-label="Pagination Navigation"> <!-- vidme-v27: wrapper data-total --><div class="w3-bar w3-center j-pagination">${prevBtn}${parts.join('')}${nextBtn}</div></nav>`;
+}
+// vidme-paging: card layak full-render hanya kalau page aktif memuatnya (page-mode)
+function _onPageRenderable(id) {
+  if (!(_pageParam() !== null && !state.folder && !$('#search').value)) return true; // bukan page-mode
+  const idx = state.videos.findIndex(x => x.id === id);
+  const start = (state.page - 1) * PAGE_SIZE;
+  return idx >= start && idx < start + PAGE_SIZE;
+}
+function initPagination() { // vidme-v27: initPagination bind
+  const wrap = document.querySelector('.j-pagination');
+  if (!wrap) return;
+  const total = parseInt(wrap.closest('.pagination-wrapper')?.dataset.total || '0', 10);
+  if (!total) return;
+  wrap.querySelectorAll('[data-page]').forEach(b => {
+    b.addEventListener('click', ev => {
+      ev.preventDefault();
+      const p = parseInt(b.dataset.page, 10);
+      if (!Number.isFinite(p) || p < 1 || p > total || p === state.page) return;
+      state.page = p;
+      _suppressScrollRestore = true;
+      history.pushState({}, '', pageUrl(p));
+      render();
+      requestAnimationFrame(() => { const g = document.getElementById('videos'); if (g) window.scrollTo(0, g.offsetTop); });
+    });
+  });
+}
+function initRecentNav() {
+  // vidme-recent-live-sync (v2.9.1): counter/dots update LIVE saat user swipe/scroll;
+  // di-suppress hanya selama scroll programatik (arrow/dot) sampai target tercapai.
+  const track = document.querySelector('.recent-slides');
+  if (!track) return;
+  const slides = [...track.querySelectorAll('.video-card')];
+  const prev = document.getElementById('recent-prev');
+  const next = document.getElementById('recent-next');
+  const counter = document.getElementById('recent-counter');
+  const dots = [...document.querySelectorAll('.recent-dot')];
+  if (!slides.length || !prev || !next) return;
+  const state = track.__recentState || (track.__recentState = { pending: null, settle: 0, raf: 0 });
+  state.pending = null;
+  const wrap = n => (n + slides.length) % slides.length;
+  const width = () => track.clientWidth || 1;
+  const liveIndex = () => wrap(Math.round(track.scrollLeft / width()));
+  const currentIndex = () => (state.pending === null ? liveIndex() : state.pending);
+  const paint = idx => {
+    if (counter) counter.textContent = `${idx + 1} / ${slides.length}`;
+    dots.forEach((dot, i) => {
+      const active = i === idx;
+      dot.classList.toggle('active', active);
+      dot.setAttribute('aria-current', active ? 'true' : 'false');
+    });
+  };
+  const settle = () => { state.pending = null; paint(liveIndex()); };
+  const go = n => {
+    state.pending = wrap(n);
+    track.scrollTo({ left: state.pending * width(), behavior: 'smooth' });
+    paint(state.pending);
+  };
+  prev.onclick = () => go(currentIndex() - 1);
+  next.onclick = () => go(currentIndex() + 1);
+  dots.forEach(dot => { dot.onclick = () => go(Number(dot.dataset.index)); });
+  if (!track.__recentBound) {
+    track.__recentBound = true;
+    const takeover = () => { track.__recentState.pending = null; };
+    track.addEventListener('touchmove', takeover, { passive: true });
+    track.addEventListener('wheel', takeover, { passive: true });
+  }
+  track.onscroll = () => {
+    if (!state.raf) state.raf = requestAnimationFrame(() => {
+      state.raf = 0;
+      if (state.pending === null) {
+        paint(liveIndex());
+      } else if (Math.abs(track.scrollLeft - state.pending * width()) < 4) {
+        state.pending = null;
+        paint(liveIndex());
+      }
+    });
+    clearTimeout(state.settle);
+    state.settle = setTimeout(settle, 140);
+  };
+  settle();
+}
+// vidme-library: virtual views punya URL resmi /library/<view> (22-09-26)
+function parseUrlFolder() {
+  const parts = location.pathname.split('/').filter(Boolean);
+  const vmap = { portrait: '__portrait__', landscape: '__landscape__', uncategorized: 'null' };
+  if (parts.length === 2 && parts[0] === 'library') return vmap[parts[1]] || null;
+  if (parts.length === 4 && parts[0] === 'library' && parts[2] === 'v') return vmap[parts[1]] || null;
+  if (parts.length === 1 && parts[0] !== 'v') {
+    const slug = parts[0];
+    const folder = state.folders.find(f => slugify(f.name) === slug);
+    return folder ? folder.id : null;
+  }
+  return null;
+}
+async function load() {
+  const [videos, folderTree] = await Promise.all([api('/api/videos'), api('/api/folders')]);
+  state.videos = videos;
+  state.folderTree = folderTree;
+  state.folders = flattenFolders(folderTree);
+  // Restore folder from URL
+  const urlFolder = parseUrlFolder();
+  if (urlFolder) {
+    state.folder = urlFolder;
+    if (urlFolder === '__portrait__') $('#heading').textContent = 'Portrait'; // vidme-library
+    else if (urlFolder === '__landscape__') $('#heading').textContent = 'Landscape';
+    else if (urlFolder === 'null') $('#heading').textContent = 'Uncategorized';
+    else {
+      const folder = state.folders.find(f => f.id === urlFolder);
+      if (folder) {
+        $('#heading').textContent = folder.name;
+      } else {
+        state.folder = null;
+        $('#heading').textContent = 'All videos';
+      }
+    }
+  } else {
+    state.folder = null;
+    $('#heading').textContent = 'All videos';
+  }
+  renderFolders(); render();
+  // vidme-rc3.1: filter lama HANYA nge-poll video 'processing'. Kalau halaman dibuka saat
+  // video sudah 'ready' tapi storyboard/microclip belum jadi, TIDAK ADA polling yang mulai
+  // — preview-nya cuma muncul setelah refresh manual lagi. Sekarang poll apa pun yang
+  // belum settled, tapi hanya kalau videonya baru dibuat: job preview yang sudah mati
+  // (video lama) tidak boleh di-poll selamanya tiap kali halaman dibuka.
+  const _RECENT_MS = 3 * 60 * 60 * 1000;
+  state.videos.filter(v => !_vidSettled(v) && v.status !== 'error' &&
+    (v.status === 'processing' || (Date.now() - new Date(v.created_at).getTime()) < _RECENT_MS)
+  ).forEach(poll);
+}
+// vidme-rc3: video baru dianggap SELESAI kalau status DAN kedua artefak preview sudah ada.
+// Transcode selesai ~3-4 menit lebih awal dari storyboard/microclip, jadi berhenti di
+// status==='ready' (kode lama) membuat storyboard tidak diawasi sama sekali -> hanya muncul
+// setelah F5 manual. Ini akar keluhan "storyboard gak ke attach".
+function _vidSettled(v) {
+  return !!(v && v.status === 'ready' && v.has_storyboard === 1 && v.has_microclip === 1);
+}
+async function poll(v) {
+  const n = await api('/api/videos/' + v.id);
+  const i = state.videos.findIndex(x => x.id === v.id);
+  if (i >= 0) state.videos[i] = n;
+  // v2.3: patch in place — full render() di sini membunuh hover preview (keluhan #4).
+  // vidme-rc5: KECUALI transisi -> 'ready' — itu butuh render() FULL supaya section
+  // Recent Uploads ikut ke-update (section-nya cuma ada saat render penuh).
+  if (n.status === 'ready' && v.status !== 'ready') {
+    window.stopPreview?.();
+    render();
+  } else {
+    const els = document.querySelectorAll(`.video-card[data-id="${v.id}"]`);
+    if (els.length) els.forEach(el => { el.outerHTML = card(n); });
+    else render();
+  }
+  // vidme-rc3: terus pantau sampai benar-benar settled. Backoff 3s -> 5s -> 10s,
+  // plafon 15 menit supaya job preview yang mati tidak nge-poll selamanya.
+  const started = v._pollStarted || Date.now();
+  n._pollStarted = started;
+  const age = Date.now() - started;
+  const wasSettled = _vidSettled(v); // rc3.1: toast hanya saat TRANSISI processing->settled,
+  if (!_vidSettled(n) && age < 15 * 60 * 1000) {   // bukan untuk video yang sudah settled
+    const delay = age < 60 * 1000 ? 3000 : (age < 5 * 60 * 1000 ? 5000 : 10000);
+    setTimeout(() => poll(n), delay);
+  } else if (_vidSettled(n) && !wasSettled) {
+    toast(`✓ <b>${esc(n.title)}</b> siap`, 'success');
+  }
+}
+
+// ── Upload (background) ──
+$('#search').oninput = render;
+
+// Tombol X (desktop + mobile): reset KEDUA input (mobile mirror #search), refresh list, fokus balik
+function clearSearch() {
+  $('#search').value = '';
+  state.page = 1; // vidme-paging
+  // vidme-paging-clearsearch-sentinel
+  if (_pageParam()) history.replaceState({}, '', pageUrl(null));
+  const m = document.getElementById('mobileSearchInput');
+  if (m) m.value = '';
+  render();
+  const active = document.getElementById('mobileSearchOverlay')?.style.display !== 'none' ? m : $('#search');
+  active?.focus();
+}
+
+// ── vidme-codecgate: client-side codec pre-detection (baca head+tail ~1MB, TANPA upload) (22-09-26) ──
+function detectVideoCodec(file) {
+  const ext = (file.name || '').split('.').pop().toLowerCase();
+  const R = c => ({ ok: false, codec: c });
+  if (ext === 'webm') return Promise.resolve(R('WebM (VP8/VP9/AV1)'));
+  if (ext === 'wmv') return Promise.resolve(R('WMV'));
+  if (!['mp4','mov','m4v','3gp','mkv','avi','ts','flv'].includes(ext)) return Promise.resolve(R(ext.toUpperCase()));
+  const HEAD = 1024 * 1024, TAIL = 1024 * 1024;
+  const parts = [file.slice(0, Math.min(HEAD, file.size))];
+  if (file.size > HEAD) parts.push(file.slice(Math.max(HEAD, file.size - TAIL)));
+  return Promise.all(parts.map(p => new Promise(res => {
+    const fr = new FileReader();
+    fr.onload = () => res(new Uint8Array(fr.result));
+    fr.onerror = () => res(null);
+    fr.readAsArrayBuffer(p);
+  }))).then(chunks => {
+    if (chunks.some(c => c === null)) return R('file tidak terbaca');
+    let bin = '';
+    for (const c of chunks) for (let i = 0; i < c.length; i++) bin += String.fromCharCode(c[i]);
+    if (ext === 'mkv') {
+      if (bin.includes('V_MPEG4/ISO/AVC')) return { ok: true, codec: 'h264' };
+      if (bin.includes('V_MPEGH/ISO/HEVC')) return R('HEVC');
+      if (bin.includes('V_AV1')) return R('AV1');
+      if (bin.includes('V_VP9')) return R('VP9');
+      if (bin.includes('V_VP8')) return R('VP8');
+      return R('tidak terdeteksi di MKV');
+    }
+    if (ext === 'avi') {
+      if (/avc1|h264|H264/.test(bin)) return { ok: true, codec: 'h264' };
+      if (/XVID|DIVX|DX50|MP4V/i.test(bin)) return R('MPEG-4/XviD');
+      return R('tidak terdeteksi di AVI');
+    }
+    if (ext === 'flv') {
+      if (bin.includes('avc1')) return { ok: true, codec: 'h264' };
+      if (bin.includes('hvc1')) return R('HEVC');
+      return R('tidak terdeteksi di FLV');
+    }
+    if (ext === 'ts') {
+      const st = tsStreamTypes(bin);
+      if (st.h264) return { ok: true, codec: 'h264' };
+      if (st.hevc) return R('HEVC');
+      if (st.av1) return R('AV1');
+      return R('tidak terdeteksi di TS');
+    }
+    // mp4-family: scan fourcc di head+tail (moov bisa di depan atau belakang file)
+    const FAIL = [['hvc1','HEVC'],['hev1','HEVC'],['dvh1','HEVC (Dolby)'],['dva1','AV1'],['av01','AV1'],['vp09','VP9'],['vp08','VP8'],['mp4v','MPEG-4 Visual'],['xvid','XviD'],['divx','DivX'],['dx50','DivX']];
+    for (const [f, label] of FAIL) if (bin.includes(f)) return R(label);
+    if (bin.includes('avc1') || bin.includes('avc3') || bin.includes('avc4') || bin.includes('h264')) return { ok: true, codec: 'h264' };
+    return R('tidak terdeteksi');
+  });
+}
+// TS: parse PAT→PMT, kumpulkan stream_type video
+function tsStreamTypes(bin) {
+  const out = { h264: false, hevc: false, av1: false };
+  const at = i => bin.charCodeAt(i) & 0xff;
+  let pmtPids = [];
+  for (let off = 0; off + 188 <= bin.length; off += 188) {
+    if (at(off) !== 0x47) continue;
+    const pusi = !!(at(off + 1) & 0x40);
+    const pid = ((at(off + 1) & 0x1f) << 8) | at(off + 2);
+    if (!pusi) continue;
+    const afc = (at(off + 3) >> 4) & 0x3;
+    let p = off + 4;
+    if (afc & 0x2) { p += 1 + at(p); }
+    if ((afc & 0x1) === 0) continue;
+    const pointer = at(p); p += 1 + pointer;
+    const tableId = at(p);
+    if (tableId === 0x00) {
+      const sectionLen = ((at(p + 1) & 0x0f) << 8) | at(p + 2);
+      const end = p + 3 + sectionLen - 4;
+      for (let q = p + 8; q + 4 <= end; q += 4) {
+        const prog = (at(q) << 8) | at(q + 1);
+        const pnum = ((at(q + 2) & 0x1f) << 8) | at(q + 3);
+        if (prog !== 0 && pnum) pmtPids.push(pnum);
+      }
+    } else if (tableId === 0x02 && pmtPids.includes(pid)) {
+      const sectionLen = ((at(p + 1) & 0x0f) << 8) | at(p + 2);
+      const pil = ((at(p + 10) & 0x0f) << 8) | at(p + 11);
+      const end = p + 3 + sectionLen - 4;
+      for (let q = p + 12 + pil; q + 5 <= end; ) {
+        const st = at(q);
+        const esLen = ((at(q + 3) & 0x0f) << 8) | at(q + 4);
+        if (st === 0x1b) out.h264 = true;
+        if (st === 0x24) out.hevc = true;
+        if (st === 0x35) out.av1 = true;
+        q += 5 + esLen;
+      }
+    }
+  }
+  return out;
+}
+function codecGateToast(gate) {
+  toast('❌ Codec <b>' + esc(gate.codec) + '</b> tidak didukung — hanya H.264. Convert dulu sebelum upload.', 'error', 8000);
+}
+
+// vidme-mupload: onchange multi-file — validasi per file, file invalid di-skip (tidak membatalkan semua)
+$('#file').onchange = async e => {
+  const files = [...e.target.files];
+  if (!files.length) return;
+  const _validExts = ['mp4','mov','avi','mkv','webm','ts','m4v','3gp','flv','wmv'];
+  const ok = [];
+  for (const file of files) {
+    const _ext = file.name.split('.').pop().toLowerCase();
+    if (!_validExts.includes(_ext)) { alert('Format tidak didukung: .' + _ext + ' (' + file.name + ') — di-skip'); continue; }
+    const _gate = await detectVideoCodec(file); // vidme-codecgate: pre-detection per file
+    if (!_gate.ok) { codecGateToast(_gate); continue; }
+    ok.push(file);
+  }
+  if (!ok.length) { e.target.value = ''; $('#fileName').textContent = ''; return; }
+  $('#fileName').textContent = ok.length === 1 ? ok[0].name : (ok.length + ' file selected');
+  const t = $('#titleInput');
+  if (t && !t.value && ok.length === 1) t.value = ok[0].name.replace(/\.[^.]+$/, '');
+};
+$('#drop').ondragover = e => e.preventDefault();
+$('#drop').ondrop = async e => { // vidme-mupload: codec-gate per file, invalid di-skip
+  e.preventDefault();
+  const ok = [];
+  for (const _f of e.dataTransfer.files) {
+    const _gate = await detectVideoCodec(_f); // vidme-codecgate
+    if (_gate.ok) ok.push(_f); else codecGateToast(_gate);
+  }
+  const _dt = new DataTransfer();
+  ok.forEach(_f => _dt.items.add(_f));
+  $('#file').files = _dt.files;
+  $('#fileName').textContent = ok.length === 1 ? ok[0].name : (ok.length + ' file selected');
+};
+// vidme-mupload: simpan {uploadId,file,folderId,filename} utk pumpQueue — SW start butuh Blob via postMessage
+let _idbQueue = [];
+const _origIdbPut = idbPut;
+idbPut = function(k, v) { if (v && v.status === 'uploading' && v.file) { _idbQueue.push({ uploadId: k, file: v.file, folderId: v.folderId, filename: v.filename }); if (_idbQueue.length > 20) _idbQueue = _idbQueue.slice(-20); } return _origIdbPut(k, v); };
+
+$('#uploadForm').onsubmit = async e => {
+  e.preventDefault();
+  const fileInput = $('#file');
+  const file = fileInput.files[0];
+  if (!file) return;
+  const _gate = await detectVideoCodec(file); // vidme-codecgate: hard gate sebelum IDB/SW
+  if (!_gate.ok) { codecGateToast(_gate); return; }
+  const _files = [...fileInput.files]; // vidme-mupload: capture SEBELUM closeModal (form bisa ke-reset)
+  const _formTitle = ($('#titleInput')?.value || '').trim();
+  const folderId = $('#folderSelect').value || null;
+  closeModal();
+  toggleUploadCenter();
+  // vidme-mupload: tiap file = item queue sendiri; multi-file => title = nama file (title form diabaikan, keputusan user)
+  for (const file of _files) {
+    const _gate = await detectVideoCodec(file); // vidme-codecgate: hard gate sebelum IDB/SW
+    if (!_gate.ok) { codecGateToast(_gate); continue; }
+    const title = _files.length > 1 ? file.name.replace(/\.[^.]+$/, '')
+      : (_formTitle || file.name.replace(/\.[^.]+$/, ''));
+    const clientUploadId = crypto.randomUUID();
+    state.uploads.push({ id: clientUploadId, title, status: 'queued', progress: 0, timestamp: null });
+    await idbPut(clientUploadId, {
+      uploadId: clientUploadId, file, title, folderId, filename: file.name,
+      totalSize: file.size, totalChunks: Math.ceil(file.size / (5*1024*1024)),
+      serverUploadId: null, lastChunk: -1, status: 'uploading',
+      startedAt: Date.now(), lastActivity: Date.now()
+    });
+    uploadQueue.push(clientUploadId);
+  }
+  if (!navigator.serviceWorker?.controller) {
+    state.uploads.forEach(u => { if (u.status === 'queued') { u.status = 'error'; u.timestamp = Date.now(); } });
+    renderUploadCenter();
+    toast('Service worker not ready. Please refresh.', 'error');
+    return;
+  }
+  const _n = _files.length;
+  toast(_n > 1 ? `${_n} file queued — 2 upload paralel` : `Upload started: <b>${esc(state.uploads[state.uploads.length-1].title)}</b>`, 'info');
+  pumpQueue();
+};
+// vidme-mupload: antrian 2 slot aktif (keputusan user 25-09-26) — file berikut start saat ada slot kosong
+let uploadQueue = [];
+let _activeUploads = 0;
+const UPLOAD_CONCURRENCY = 2;
+function pumpQueue() {
+  const sw = navigator.serviceWorker?.controller;
+  if (!sw) return;
+  while (_activeUploads < UPLOAD_CONCURRENCY && uploadQueue.length) {
+    const id = uploadQueue.shift();
+    const u = state.uploads.find(x => x.id === id);
+    const rec = _idbQueue.find(r => r.uploadId === id);
+    if (!u || u.status !== 'queued' || !rec) continue; // cancelled sebelum start
+    u.status = 'uploading';
+    sw.postMessage({ type: 'sw-upload-start', uploadId: id, file: rec.file, title: u.title, folderId: rec.folderId, filename: rec.filename });
+    _activeUploads++;
+  }
+  markUploadsDirty();
+}
+async function createNewFolder() {
+  const name = await showPrompt('New folder', 'Folder name');
+  if (name) { await api('/api/folders', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name }) }); load(); renderLibraryPanel(); }
+}
+
+// ── Sidebar toggle (desktop only) ──
+function toggleSidebar() {
+  const collapsed = document.body.classList.toggle('sidebar-collapsed');
+  const mc = $('#main-content');
+  const reveal = $('#sidebarRevealBtn');
+  if (window.innerWidth >= 1024) {
+    if (mc) mc.style.marginLeft = collapsed ? '0' : '280px';
+  }
+  if (reveal) reveal.style.display = collapsed ? 'flex' : 'none';
+  localStorage.setItem('vidme_sidebar_collapsed', collapsed ? '1' : '0');
+}
+function restoreSidebar() {
+  const saved = localStorage.getItem('vidme_sidebar_collapsed');
+  const reveal = $('#sidebarRevealBtn');
+  if (saved === '1') {
+    document.body.classList.add('sidebar-collapsed');
+    if (window.innerWidth >= 1024) { const mc = $('#main-content'); if (mc) mc.style.marginLeft = '0'; }
+    if (reveal) reveal.style.display = 'flex';
+  } else {
+    if (reveal) reveal.style.display = 'none';
+  }
+}
+document.addEventListener('DOMContentLoaded', () => { const btn = $('#newFolder'); if (btn) btn.onclick = createNewFolder; restoreSidebar(); });
+window.addEventListener('resize', () => {
+  const mc = document.getElementById('main-content');
+  if (!mc) return;
+  if (window.innerWidth < 1024) { mc.style.marginLeft = '0'; return; }
+  mc.style.marginLeft = document.body.classList.contains('sidebar-collapsed') ? '0' : '280px';
+});
+
+// ── Unified hover/tap preview — main file montase /clip (4/6 segmen, di-encode FFmpeg) ──
+// Desktop: hover 250ms → play loop montase; leave → STOP immediate. Mobile (hover:none): tap 1 = preview, tap 2 = open.
+(function() {
+  const container = document.getElementById('videos');
+  if (!container) return;
+
+  let openTimer = null;
+  let activeCard = null;
+  let activeVideo = null;
+
+  function stopPreview() {
+    if (openTimer) { clearTimeout(openTimer); openTimer = null; }
+    if (activeVideo) {
+      activeVideo.pause();
+      activeVideo.removeAttribute('src');
+      activeVideo.load();
+      activeVideo.remove();
+      activeVideo = null;
+    }
+    activeCard = null;
+  }
+
+  // 19-09-26: montase per video is immutable — keep the blob URL in memory so a re-hover
+  // is instant instead of a fresh ~300KB download (which on a busy/slow link made hover
+  // look dead while an upload saturated the uplink).
+  const _clipCache = new Map();   // videoId -> objectURL
+  async function showPreview(card) {
+    const frame = card.querySelector('div.relative');
+    if (!frame || !card.dataset.clip) return;
+    const clipId = card.dataset.clip;
+    const vid = document.createElement('video');
+    vid.className = 'absolute inset-0 h-full w-full'; vid.style.objectFit = 'contain'; vid.style.background = '#050507'; // letterbox: landscape utuh
+    vid.muted = true; vid.loop = true; vid.playsInline = true; vid.preload = 'none';
+    frame.appendChild(vid);
+    activeCard = card;
+    activeVideo = vid;
+    let src = _clipCache.get(clipId);
+    if (!src) {
+      try {
+        const r = await fetch('/clip/' + clipId);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        src = URL.createObjectURL(await r.blob());
+        _clipCache.set(clipId, src);
+      } catch (e) { return; }
+    }
+    if (activeVideo !== vid) return;             // user already moved on
+    vid.src = src;
+    vid.play().catch(() => {});
+  }
+
+  const isTouchPrimary = () => matchMedia('(hover: none)').matches;
+
+  // Desktop hover — stop immediate saat pindah/keluar kartu
+  container.addEventListener('mouseover', (e) => {
+    const card = e.target.closest('.video-card');
+    if (card === activeCard) return; // synthetic mouseover pas tap: jangan hancurin preview
+    stopPreview();
+    if (!card || state.selectMode || isTouchPrimary()) return;
+    openTimer = setTimeout(() => showPreview(card), 250);
+  });
+  container.addEventListener('mouseleave', () => stopPreview());
+  window.stopPreview = stopPreview;   // 19-09-26: SSE handler + render() call this
+
+  // Touch: tap 1 = preview montase (~300KB), tap 2 di kartu sama = buka player
+  container.addEventListener('click', (e) => {
+    if (!isTouchPrimary() || state.selectMode) return;
+    const card = e.target.closest('.video-card');
+    if (!card) return;
+    if (!card.dataset.clip) return; // gak ada montase → biarkan tap navigate normal
+    if (activeCard === card) {
+      e.preventDefault();
+      e.stopPropagation();
+      stopPreview();
+      openVideo(card.dataset.id, card.dataset.folderId);
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    stopPreview();
+    showPreview(card);
+  }, true); // capture — intercept sebelum article onclick
+})();
+
+setInterval(() => { if (document.visibilityState === "visible") fetch("/api/folders").then(r => r.json()).then(data => { state.folders = data; state.folderTree = buildTree(data); renderFolders(); }).catch(() => {}); }, 30000);
+// ponytail: upload survives navigation via SW — beforeunload guard removed
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && localStorage.getItem("vidme_refresh")) { localStorage.removeItem("vidme_refresh"); load().catch(console.error); } });
+
+
+// ── SPA sidebar behavior in player view (Ticket 05) ──
+(function() {
+  const sidebar = document.getElementById('sidebar');
+  const logo = document.getElementById('pvSidebarLogo');
+  if (!sidebar || !logo) return;
+  // Toggle pv-mode class whenever view switches — patch via MutationObserver on view-player
+  const playerEl = document.getElementById('view-player');
+  const syncMode = () => {
+    const isPlayer = playerEl.style.display !== 'none';
+    document.body.classList.toggle('pv-mode', isPlayer);
+    if (!isPlayer) sidebar.classList.remove('pv-sidebar-open');
+  };
+  new MutationObserver(syncMode).observe(playerEl, { attributes: true, attributeFilter: ['style'] });
+  // Hover logo -> slide in; leave sidebar -> slide out
+  logo.addEventListener('mouseenter', () => sidebar.classList.add('pv-sidebar-open'));
+  logo.addEventListener('click', () => sidebar.classList.toggle('pv-sidebar-open'));
+  sidebar.addEventListener('mouseleave', () => {
+    if (document.body.classList.contains('pv-mode')) sidebar.classList.remove('pv-sidebar-open');
+  });
+})();
+
+// ── SPA Router (vanilla JS) ──
+const Router = {
+  parseRoute() {
+    const parts = location.pathname.split('/').filter(Boolean);
+    // /v/:videoId
+    if (parts.length === 2 && parts[0] === 'v') {
+      return { view: 'player', videoId: parts[1], folderId: null };
+    }
+    // vidme-library: /library/:view — virtual browse (22-09-26)
+    if (parts.length === 2 && parts[0] === 'library') {
+      const vmap = { portrait: '__portrait__', landscape: '__landscape__', uncategorized: 'null' };
+      if (vmap[parts[1]]) return { view: 'browse', folderId: vmap[parts[1]] };
+    }
+    // vidme-library: /library/:view/v/:videoId — player dari virtual folder
+    if (parts.length === 4 && parts[0] === 'library' && parts[2] === 'v') {
+      const vmap = { portrait: '__portrait__', landscape: '__landscape__', uncategorized: 'null' };
+      return { view: 'player', videoId: parts[3], folderId: vmap[parts[1]] || null };
+    }
+    // /:folderSlug/v/:videoId
+    if (parts.length === 3 && parts[1] === 'v') {
+      const folder = state.folders.find(f => slugify(f.name) === parts[0]);
+      return { view: 'player', videoId: parts[2], folderId: folder ? folder.id : null };
+    }
+    // browse (root or folder slug); vidme-paging: page dari ?page=N
+    return { view: 'browse', folderId: parseUrlFolder(), page: _pageParam() };
+  },
+  navigate(url) {
+    if (location.pathname + location.search === url) return; // no-op same URL
+    history.pushState({}, '', url);
+    this.renderRoute();
+  },
+  async renderRoute() {
+    const route = this.parseRoute();
+    const browseEl = document.getElementById('view-browse');
+    const playerEl = document.getElementById('view-player');
+    if (route.view === 'player') {
+      // Exit browse
+      if (this.currentView === 'browse' && typeof BrowseView !== 'undefined' && BrowseView.exit) await BrowseView.exit();
+      // vidme-scroll v2.3.2-scrollclamp: save posisi browse HARUS sebelum display swap —
+      // sesudah #view-browse di-hide, tinggi dokumen runtuh -> browser clamp scrollY ke ~50
+      // -> return entry ke-simpan nilai ter-clamp -> back dari player mendarat di ATAS (bug).
+      try { sessionStorage.setItem('vidme-scroll-return', JSON.stringify({ key: this._lastBrowseKey || 'home', y: window.scrollY })); } catch (e) {}
+      browseEl.style.display = 'none';
+      playerEl.style.display = '';
+      this.currentView = 'player';
+      if (typeof PlayerView !== 'undefined' && PlayerView.enter) await PlayerView.enter(route.videoId, route.folderId);
+      else if (location.pathname) { /* PlayerView not yet defined (Ticket 04 pending): legacy fallback */ location.href = location.pathname; }
+    } else {
+      // Exit player
+      if (this.currentView === 'player' && typeof PlayerView !== 'undefined' && PlayerView.exit) await PlayerView.exit();
+      playerEl.style.display = 'none';
+      browseEl.style.display = '';
+      this.currentView = 'browse';
+      state.page = route.page || 1; // vidme-paging
+      if (typeof BrowseView !== 'undefined' && BrowseView.enter) await BrowseView.enter(route);
+      else {
+        // BrowseView not yet defined (Ticket 04 pending): existing inline logic
+        state.page = route.page || 1; // vidme-paging
+        const urlFolder = route.folderId;
+        if (urlFolder) {
+          state.folder = urlFolder;
+          if (urlFolder === '__portrait__') $('#heading').textContent = 'Portrait'; // vidme-library
+          else if (urlFolder === '__landscape__') $('#heading').textContent = 'Landscape';
+          else if (urlFolder === 'null') $('#heading').textContent = 'Uncategorized';
+          else {
+            const folder = state.folders.find(f => f.id === urlFolder);
+            $('#heading').textContent = folder ? folder.name : 'All videos';
+          }
+        } else {
+          state.folder = null;
+          $('#heading').textContent = 'All videos';
+        }
+        renderFolders(); render();
+      }
+    }
+    // vidme-scroll v2.2: restore HANYA saat kembali ke browse dan ada entry return; player SELALU dari atas
+    this._lastBrowseKey = route.folderId || 'home';
+    if (route.view === 'player') {
+      requestAnimationFrame(() => window.scrollTo(0, 0)); // vidme-v2.2: buka video = mulai dari atas (bugfix)
+    } else {
+      let _entry = null;
+      try { _entry = JSON.parse(sessionStorage.getItem('vidme-scroll-return') || 'null'); } catch (e) {}
+      if (_entry && typeof _entry.y === 'number' && _entry.y > 0) {
+        sessionStorage.removeItem('vidme-scroll-return');
+        // vidme-v2.3.1-scroll: simple rAF restore — render() sendiri sudah preserve scroll
+        // untuk SSE/reconnect/poll render. Ini hanya restore PERTAMA kali masuk browse.
+        requestAnimationFrame(() => window.scrollTo(0, _entry.y));
+      }
+    }
+  },
+  currentView: null,
+  _lastBrowseKey: 'home',
+};
+
+
+// ── SPA PlayerView module (from player.html — Ticket 04) ──
+const PlayerView = (() => {
+  let pvActive = false;
+  let pvId = null;
+  let pvMetadata = null;
+  let controlsTimer = 0;
+  let mouseInside = false;
+  let lastTapLeft = 0, lastTapRight = 0;
+  let touchHandled = false;
+  let lastTouchEnd = 0;
+  let _skipAcc = { left: 0, right: 0, timer: null };
+
+  const vid = document.getElementById("video");
+  const vidLoader = document.getElementById("vid-loader");
+  const wrap = document.getElementById("player-wrap");
+  const overlay = document.getElementById("controls-overlay");
+  const centerTap = document.getElementById("center-tap");
+  const playIcon = document.getElementById("play-icon");
+  const playIconSymbol = document.getElementById("play-icon-symbol");
+
+  function showLoader() { vidLoader.style.display = "flex"; playIcon.style.display = "none"; }
+  function hideLoader() { vidLoader.style.display = "none"; playIcon.style.display = ""; }
+  function showControls() { overlay.classList.remove("hidden-ctrl"); clearTimeout(controlsTimer); }
+  function scheduleHide(ms) {
+    clearTimeout(controlsTimer);
+    controlsTimer = setTimeout(() => { if (!mouseInside) overlay.classList.add("hidden-ctrl"); }, ms);
+  }
+  function playWithSound() {
+    vid.muted = false;
+    document.getElementById("volume").value = vid.volume || 1;
+    vid.paused ? vid.play().catch(() => {}) : vid.pause();
+  }
+  function flash(el) {
+    el.classList.add("show");
+    clearTimeout(el._t);
+    el._t = setTimeout(() => el.classList.remove("show"), 600);
+  }
+  function skip(sec) {
+    const side = sec < 0 ? "left" : "right";
+    const el = document.getElementById(sec < 0 ? "flash-left" : "flash-right");
+    clearTimeout(_skipAcc.timer);
+    _skipAcc[side] += sec;
+    el.textContent = (_skipAcc[side] > 0 ? "+" : "") + _skipAcc[side] + "s";
+    flash(el);
+    _skipAcc.timer = setTimeout(() => { _skipAcc.left = 0; _skipAcc.right = 0; }, 800);
+    vid.currentTime = Math.max(0, Math.min(vid.duration || 0, vid.currentTime + sec));
+  }
+  function handleTap(side) {
+    showControls();
+    if (!vid.paused) scheduleHide(3000);
+    const now = Date.now();
+    if (side === "left") {
+      if (now - lastTapLeft < 300) { skip(-5); flash(document.getElementById("flash-left")); lastTapLeft = 0; }
+      else lastTapLeft = now;
+    } else {
+      if (now - lastTapRight < 300) { skip(5); flash(document.getElementById("flash-right")); lastTapRight = 0; }
+      else lastTapRight = now;
+    }
+  }
+  function toggleFullscreen() {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else (wrap.requestFullscreen && wrap.requestFullscreen()) || (wrap.webkitRequestFullscreen && wrap.webkitRequestFullscreen());
+  }
+  function updatePinBtn() {
+    const pinned = !!pvMetadata.is_pinned;
+    const btn = document.getElementById("btn-pin");
+    btn.classList.toggle("border-indigo-400", pinned);
+    btn.classList.toggle("text-indigo-300", pinned);
+    btn.innerHTML = '<span class="material-symbols-outlined align-middle">push_pin</span> ' + (pinned ? "Pinned" : "Pin");
+  }
+  async function togglePin() {
+    const next = !pvMetadata.is_pinned;
+    const r = await fetch("/api/videos/" + encodeURIComponent(pvId) + "/pin", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_pinned: next })
+    });
+    if (r.ok) { pvMetadata.is_pinned = next; updatePinBtn(); }
+  }
+  function enterEdit() {
+    const titleEl = document.getElementById("title");
+    const titleInput = document.getElementById("videoTitleInput");
+    const editBtn = document.getElementById("btn-edit-title");
+    titleInput.value = pvMetadata.title;
+    titleEl.classList.add("hidden");
+    editBtn.classList.add("hidden");
+    titleInput.classList.remove("hidden");
+    titleInput.focus(); titleInput.select();
+  }
+  async function commitEdit() {
+    const titleEl = document.getElementById("title");
+    const titleInput = document.getElementById("videoTitleInput");
+    const editBtn = document.getElementById("btn-edit-title");
+    const newTitle = titleInput.value.trim();
+    titleInput.classList.add("hidden");
+    titleEl.classList.remove("hidden");
+    editBtn.classList.remove("hidden");
+    if (!newTitle || newTitle === pvMetadata.title) { titleEl.textContent = pvMetadata.title; return; }
+    const r = await fetch("/api/videos/" + encodeURIComponent(pvId), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: newTitle })
+    });
+    if (r.ok) { pvMetadata.title = newTitle; titleEl.textContent = newTitle; document.title = newTitle + " — VidMe"; localStorage.setItem("vidme_refresh", "1"); }
+    else titleEl.textContent = pvMetadata.title;
+  }
+  function setup() {
+    const portrait = !!pvMetadata.is_portrait;
+    document.title = pvMetadata.title + " — VidMe";
+    document.getElementById("title").textContent = pvMetadata.title;
+    document.getElementById("date").textContent = new Date(pvMetadata.created_at).toLocaleString();
+    document.getElementById("btn-download").href = "/download/" + encodeURIComponent(pvId);
+    updatePinBtn();
+    document.getElementById("resolution").innerHTML =
+      '<option value="original">Original</option>' +
+      (pvMetadata.has_480p ? '<option value="480">' + (portrait ? "480w" : "480p") + '</option>' : "") +
+      (pvMetadata.has_360p ? '<option value="360">' + (portrait ? "360w" : "360p") + '</option>' : "");
+    document.getElementById("resolution").value = pvMetadata.has_480p ? "480" : "original";
+    if (vid.readyState < 3) showLoader();
+    wrap.style.visibility = "visible";
+    vid.poster = "/thumb/" + encodeURIComponent(pvId);
+    vid.src = "/stream/" + encodeURIComponent(pvId);
+    vid.muted = true;
+    vid.load();
+  }
+
+  // ── Media event listeners (bound once — element persists in SPA) ──
+  vid.addEventListener("waiting", showLoader);
+  vid.addEventListener("seeking", showLoader);
+  vid.addEventListener("canplay", hideLoader);
+  vid.addEventListener("playing", hideLoader);
+  vid.addEventListener("ended", hideLoader);
+  vid.addEventListener("play", () => {
+    playIcon.style.opacity = "0";
+    document.getElementById("btn-play").innerHTML = '<span class="material-symbols-outlined">pause</span>';
+    if (!mouseInside) scheduleHide(2500);
+  });
+  vid.addEventListener("pause", () => {
+    clearTimeout(controlsTimer);
+    playIcon.style.opacity = "1";
+    playIconSymbol.textContent = "play_arrow";
+    document.getElementById("btn-play").innerHTML = '<span class="material-symbols-outlined">play_arrow</span>';
+    showControls();
+  });
+  vid.ontimeupdate = () => {
+    if (pvActive && !isNaN(vid.duration)) {
+      document.getElementById("seek").value = vid.currentTime;
+      document.getElementById("time").textContent = fmt(vid.currentTime) + " / " + fmt(vid.duration);
+    }
+  };
+  vid.onloadedmetadata = () => {
+    if (!pvActive) return;
+    document.getElementById("seek").max = vid.duration;
+    document.getElementById("time").textContent = "0:00 / " + fmt(vid.duration);
+  };
+
+  // ── Control element bindings (bound once) ──
+  wrap.addEventListener("mouseenter", () => { mouseInside = true; showControls(); });
+  wrap.addEventListener("mouseleave", () => { mouseInside = false; if (!vid.paused) scheduleHide(200); });
+  wrap.addEventListener("mousemove", () => { showControls(); if (!vid.paused) scheduleHide(3000); });
+  centerTap.addEventListener("touchend", (e) => {
+    e.preventDefault();
+    touchHandled = true;
+    playWithSound();
+    showControls();
+    if (!vid.paused) scheduleHide(3000);
+  }, { passive: false });
+  centerTap.addEventListener("click", () => {
+    if (touchHandled) { touchHandled = false; return; }
+    playWithSound();
+    showControls();
+    if (!vid.paused) scheduleHide(3000);
+  });
+  document.getElementById("btn-back").onclick = () => skip(-5);
+  document.getElementById("btn-fwd").onclick = () => skip(5);
+  document.getElementById("tap-left").addEventListener("touchend", () => { lastTouchEnd = Date.now(); handleTap("left"); }, { passive: true });
+  document.getElementById("tap-right").addEventListener("touchend", () => { lastTouchEnd = Date.now(); handleTap("right"); }, { passive: true });
+  document.getElementById("tap-left").addEventListener("dblclick", e => { if (Date.now() - lastTouchEnd < 500) return; skip(-5); flash(document.getElementById("flash-left")); });
+  document.getElementById("tap-right").addEventListener("dblclick", e => { if (Date.now() - lastTouchEnd < 500) return; skip(5); flash(document.getElementById("flash-right")); });
+  document.getElementById("seek").oninput = e => { vid.currentTime = Number(e.target.value); };
+  document.getElementById("btn-play").onclick = playWithSound;
+  document.getElementById("volume").oninput = e => {
+    vid.volume = Number(e.target.value);
+    vid.muted = vid.volume === 0;
+  };
+  document.getElementById("btn-full").onclick = toggleFullscreen;
+  document.getElementById("btn-loop").onclick = () => {
+    vid.loop = !vid.loop;
+    document.getElementById("btn-loop").classList.toggle("border-indigo-400", vid.loop);
+    document.getElementById("btn-loop").classList.toggle("text-indigo-300", vid.loop);
+  };
+  document.getElementById("resolution").onchange = () => {
+    const t = vid.currentTime;
+    vid.src = "/stream/" + encodeURIComponent(pvId);
+    vid.load();
+    vid.addEventListener("loadedmetadata", () => { vid.currentTime = t; }, { once: true });
+  };
+  document.getElementById("btn-pin").onclick = togglePin;
+  document.getElementById("btn-edit-title").onclick = enterEdit;
+  document.getElementById("videoTitleInput").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); e.target.blur(); } });
+  document.getElementById("videoTitleInput").addEventListener("blur", commitEdit);
+  // Back button: SPA navigate to parent folder or home
+  document.getElementById("btn-goback").onclick = e => {
+    e.preventDefault();
+    let _ret = null; try { _ret = sessionStorage.getItem('vidme-player-return'); sessionStorage.removeItem('vidme-player-return'); } catch (e) {} // vidme-v28
+    if (_ret && _ret !== location.pathname + location.search) { Router.navigate(_ret); return; } // vidme-v28: balik ke asal (pages/search/folder)
+    const parts = location.pathname.split("/").filter(Boolean);
+    const vi = parts.indexOf("v");
+    const parent = vi > 0 ? "/" + parts.slice(0, vi).join("/") + "/" : "/";
+    Router.navigate(parent);
+  };
+
+  // ── Document-level listeners: registered ONCE, guarded by pvActive ──
+  document.addEventListener("keydown", e => {
+    if (!pvActive) return;
+    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+    if (e.key === " " || e.key.toLowerCase() === "k") { e.preventDefault(); playWithSound(); }
+    if (e.key.toLowerCase() === "f") { e.preventDefault(); toggleFullscreen(); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); skip(-5); }
+    if (e.key === "ArrowRight") { e.preventDefault(); skip(5); }
+  });
+  document.addEventListener("fullscreenchange", () => {
+    if (!pvActive) return;
+    const icon = document.fullscreenElement ? "fullscreen_exit" : "fullscreen";
+    document.getElementById("btn-full").innerHTML = '<span class="material-symbols-outlined">' + icon + '</span>';
+    if (document.fullscreenElement) {
+      if (vid.videoWidth > vid.videoHeight) { try { screen.orientation.lock("landscape"); } catch (e) {} }
+      else { try { screen.orientation.lock("portrait"); } catch (e) {} }
+    } else {
+      try { screen.orientation.unlock(); } catch (e) {}
+    }
+    showControls();
+    if (!vid.paused) scheduleHide(3000);
+  });
+
+  return {
+    async enter(videoId, folderId) {
+      pvActive = true;
+      pvId = videoId;
+      try {
+        const r = await fetch("/api/videos/" + encodeURIComponent(videoId));
+        if (!r.ok) throw new Error("not found");
+        pvMetadata = await r.json();
+        setup();
+      } catch (err) {
+        Router.navigate("/");
+      }
+    },
+    async exit() {
+      pvActive = false;
+      clearTimeout(controlsTimer);
+      try { vid.pause(); } catch (e) {}
+      vid.removeAttribute("src");
+      vid.load();
+      if (document.fullscreenElement) { try { document.exitFullscreen(); } catch (e) {} }
+      document.title = "VidMe";
+    },
+    get active() { return pvActive; },
+  };
+})();
+
+// ── Browser back/forward: restore folder from URL ──
+window.onpopstate = () => { Router.renderRoute(); };
+history.scrollRestoration = 'manual';
+load().catch(console.error);
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/service-worker.js');
+  navigator.serviceWorker.addEventListener('message', e => {
+    const { type } = e.data;
+    if (type === 'sw-upload-progress') {
+      const { uploadId, progress, status, lastChunk, totalChunks, bytesSent, bytesTotal } = e.data;
+      const u = state.uploads.find(x => x.id === uploadId);
+      if (u) { u.progress = progress; u.status = status; if (lastChunk !== undefined) u.lastChunk = lastChunk; if (totalChunks !== undefined) u.totalChunks = totalChunks; if (bytesSent !== undefined) { if (bytesSent !== u.bytesSent) u._anchorAt = Date.now(); u.bytesSent = bytesSent; } if (bytesTotal !== undefined) u.bytesTotal = bytesTotal; if (e.data.speed !== undefined) u.speed = e.data.speed; markUploadsDirty(); }
+    }
+    if (type === 'sw-upload-done') {
+      const { uploadId, success, status: s } = e.data;
+      const u = state.uploads.find(x => x.id === uploadId);
+      const title = e.data.title || (u ? u.title : uploadId);
+      if (u) { u.progress = success ? 100 : u.progress; u.status = s; u.timestamp = Date.now(); renderUploadCenter(); }
+      toast(success ? '\u2713 "' + esc(title) + '" uploaded' : '\u2717 Upload failed: ' + esc(title), success ? 'success' : 'error', success ? 4000 : 6000);
+      idbDel(uploadId).catch(()=>{});
+      _idbQueue = _idbQueue.filter(r => r.uploadId !== uploadId); // vidme-mupload
+      if (_activeUploads > 0) _activeUploads--; // vidme-mupload: slot kosong -> isi antrian
+      pumpQueue();
+      if (success) { load().catch(console.error); }
+    }
+    if (type === 'sw-upload-status-response') {
+      e.data.uploads.forEach(su => {
+        if (!state.uploads.find(u => u.id === su.uploadId)) {
+          state.uploads.push({ id: su.uploadId, title: su.title || su.uploadId, status: su.status, progress: su.status === 'done' ? 100 : 0, timestamp: su.timestamp || null });
+        }
+      });
+      updateUploadBadge(); renderUploadCenter();
+    }
+    if (type === 'sw-heartbeat-ack') { swAlive = Date.now(); }
+    // 19-09-26: a NEW service worker took control (first load after an update). Reload
+    // once so this page runs the matching index.html — otherwise the page keeps stale JS
+    // and never opens /api/events (RC1). Guarded by sessionStorage: no reload loops.
+    if (type === 'sw-updated-reload') {
+      // vidme-rc3: guard lama '1' menempel seumur sesi tab, jadi update BERIKUTNYA tidak
+      // pernah memicu reload dan halaman tetap menjalankan JS lama. Sekarang guard-nya
+      // versi cache: satu reload per versi SW per sesi tab, bukan satu seumur hidup.
+      const _ver = e.data.cache || '1';
+      if (sessionStorage.getItem('vidme_sw_reloaded') !== _ver) {
+        sessionStorage.setItem('vidme_sw_reloaded', _ver);
+        location.reload();
+      }
+    }
+    if (type === 'sw-debug-error') { console.error('[SW DEBUG ERROR]', e.data.msg, e.data.stack, e.data.causeMsg); }
+    if (type === 'sw-debug-pong') { console.log('[SW DEBUG PONG] tus version:', e.data.tusVersion); }
+  });
+  navigator.serviceWorker.ready.then(async () => {
+    navigator.serviceWorker.controller?.postMessage({ type: 'sw-upload-status' });
+      navigator.serviceWorker.controller?.postMessage({ type: 'sw-debug-ping' });
+    // Auto-resume interrupted uploads from IndexedDB
+    try {
+      const pending = await idbGetAll();
+      const now = Date.now();
+      for (const rec of pending) {
+        if (rec.status !== 'uploading') continue;
+        if (now - rec.startedAt > 86400000) { idbDel(rec.uploadId).catch(()=>{}); continue; }
+        // Only resume if file Blob is still alive
+        if (!rec.file || !rec.file.size) { idbDel(rec.uploadId).catch(()=>{}); continue; }
+        if (!state.uploads.find(u => u.id === rec.uploadId)) {
+          state.uploads.push({ id: rec.uploadId, title: rec.title, status: 'uploading', progress: 0, timestamp: null });
+        }
+        navigator.serviceWorker.controller?.postMessage({ type: 'sw-upload-resume', uploadId: rec.uploadId });
+        markUploadsDirty();   // resumed uploads tick too
+        toast('Resuming upload: <b>' + esc(rec.title) + '</b>', 'info');
+      }
+      updateUploadBadge(); renderUploadCenter();
+    } catch(err) { console.error('Resume check failed:', err); }
+  });
+  // Heartbeat: detect SW kill (no ack within 30s)
+  let swAlive = Date.now();
+  setInterval(() => {
+    if (Date.now() - swAlive > 30000) {
+      const stuck = state.uploads.filter(u => u.status === 'uploading');
+      if (stuck.length) toast('Upload interrupted \u2014 will resume on next visit', 'error', 6000);
+    }
+    navigator.serviceWorker.controller?.postMessage({ type: 'sw-heartbeat' });
+  }, 15000);
+}
+
+// ── LIVE UPDATES (SSE) — 18-09-26: auto-refresh grid saat server selesai proses video ──
+// Server push event 'video' setiap status/has_storyboard/has_microclip berubah → load() tanpa refresh manual.
+(function liveUpdates() {
+  if (!window.EventSource) return;
+  let es = null, retryMs = 3000, reconnectTimer = null, lastEvent = 0;
+  let hadConnected = false, lastCatchup = 0;
+
+  function connect() {
+    try { es = new EventSource('/api/events'); } catch (e) { return scheduleRetry(); }
+    es.onopen = () => {
+      retryMs = 3000;
+      // v2.3: SSE has no replay — every event fired while this page was disconnected
+      // (tab hidden -> client closed ES; network blip; server restart) is gone.
+      // Catch up with ONE load() on re-connect, throttled to 3s.
+      if (hadConnected && Date.now() - lastCatchup > 3000) {
+        lastCatchup = Date.now();
+        load().catch(console.error);
+      }
+      hadConnected = true;
+    };
+    es.onmessage = ev => {
+      lastEvent = Date.now();
+      let d = null;
+      try { d = JSON.parse(ev.data); } catch (e) { return; }
+      if (!d) return;
+      if (d.type === 'video' && d.id) {
+        const v = state.videos.find(x => x.id === d.id);
+        if (v) {
+          const oldStatus = v.status; // vidme-rc5: simpan SEBELUM assign
+          const changed = ['status','has_storyboard','has_microclip','duration','is_portrait','width','height'].some(k => String(v[k]) !== String(d[k]));
+          Object.assign(v, d);
+          // 19-09-26: patch the ONE card instead of re-rendering the whole grid —
+          // a full render() destroys the hover-preview <video> mid-hover (RC4) and
+          // is what made "storyboard attached" invisible without a manual refresh.
+          if (changed) {
+            window.stopPreview?.();              // never orphan a live preview <video> (IIFE-local, exposed on window)
+            // vidme-rc5: transisi -> 'ready' butuh render() FULL karena section
+            // Recent Uploads cuma dibangun saat render penuh (sort by created_at,
+            // top 10). Patch in-place tidak pernah menambah kartu ke section itu.
+            // vidme-paging: card di luar page aktif -> update state saja (render membuang posisi baca)
+            if (d.status === 'ready' && oldStatus !== 'ready' && _onPageRenderable(d.id)) {
+              render();
+            } else {
+              const els = document.querySelectorAll(`.video-card[data-id="${d.id}"]`);
+              if (els.length) els.forEach(el => { el.outerHTML = card(v); });
+              else if (_onPageRenderable(d.id)) render();
+            }
+            if (d.status === 'ready') toast(`✓ <b>${esc(d.title||'video')}</b> ready`, 'success');
+          }
+        } else if (d.status === 'ready') {
+          // video baru muncul (upload dari device lain) — refresh penuh sekali
+          load().catch(console.error);
+        }
+      }
+    };
+    es.onerror = () => { if (es) { es.close(); es = null; } scheduleRetry(); };
+  }
+  function scheduleRetry() {
+    if (reconnectTimer) return;
+    reconnectTimer = setTimeout(() => { reconnectTimer = null; retryMs = Math.min(retryMs * 2, 30000); connect(); }, retryMs);
+  }
+  // vidme-rc3: JANGAN tutup EventSource saat tab hidden. SSE tidak punya replay, jadi
+  // setiap event yang terjadi selama tab hidden hilang permanen — persis itu sebabnya
+  // storyboard hanya muncul setelah refresh manual (upload 7 menit, user pindah tab,
+  // storyboard selesai di menit ke-10, event dibuang). Keepalive hanya komentar 25s;
+  // penghematannya tidak sebanding dengan kehilangan event penyelesaian.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      // Tab kembali: selalu re-sync sekali (browser men-throttle timer di background),
+      // lalu pastikan SSE hidup lagi.
+      if (Date.now() - lastCatchup > 3000) { lastCatchup = Date.now(); load().catch(console.error); }
+      if (!es) connect();
+    }
+  });
+  connect();
+  // vidme-rc5: polling safety net. SSE bisa mati diam-diam di mobile (SW lama yang
+  // tidak punya listener ini sama sekali, battery optimization, koneksi drop tanpa
+  // onerror). Tiap 30s kalau tab visible dan EventSource tidak dalam state OPEN,
+  // resync sekali — pola yang sama dipakai FileBrowser/Seafile sebagai fallback.
+  // load() = 2 fetch ringan; saat SSE sehat jalur ini tidak pernah jalan.
+  setInterval(() => {
+    if (document.hidden) return;
+    const sseUp = es && es.readyState === 1; // 1 = OPEN
+    if (!sseUp) load().catch(console.error);
+  }, 30000);
+})();
+</script>
+</body>
+</html>

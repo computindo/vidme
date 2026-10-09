@@ -1,0 +1,24 @@
+services:
+  vidme:
+    image: vidme:latest
+    container_name: vidme
+    environment:
+      TZ: Asia/Jakarta
+      STORAGE_PATH: /storage
+      PORT: 4100
+      NODE_ENV: production
+      WEBDAV_USER: vidme
+      WEBDAV_PASS: vidme123
+    ports:
+      - 4100:4100
+    volumes:
+      - /mnt/Storage1/Docker/vidme:/storage
+      - /mnt/Storage1/Docker/nextcloud-data/userdata/naufalzimt/files/sementara:/import/sementara:ro
+      - /opt/stacks/vidme/server.js:/app/server.js:ro
+      - /opt/stacks/vidme/logger.js:/app/logger.js:ro
+      - /opt/stacks/vidme/frontend:/app/frontend:ro
+      - /opt/stacks/vidme/db:/app/db:ro
+      - /etc/localtime:/etc/localtime:ro
+      - /usr/share/zoneinfo:/usr/share/zoneinfo:ro
+    restart: unless-stopped
+networks: {}

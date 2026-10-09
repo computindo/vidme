@@ -1,0 +1,24 @@
+{
+  "name": "vidme",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Self-hosted video service",
+  "main": "server.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@tus/file-store": "^2.1.1",
+    "@tus/server": "^2.4.5",
+    "archiver": "^7.0.1",
+    "better-sqlite3": "^11.7.0",
+    "chokidar": "^3.6.0",
+    "express": "^4.21.2",
+    "morgan": "^1.11.0",
+    "multer": "^1.4.5-lts.1"
+  }
+}
