@@ -6,7 +6,7 @@ import subprocess
 import urllib.request
 import urllib.error
 
-ENDPOINT = "https://models.inference.ai.azure.com/chat/completions"
+ENDPOINT = "https://models.github.ai/inference/chat/completions"
 MODEL = "gpt-4o-mini"
 
 def get_code_diff():
