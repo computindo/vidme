@@ -1,0 +1,54 @@
+name: Rust Backend CI & AI Gatekeeper
+
+on:
+  push:
+    branches:
+      - feat/merger
+    paths:
+      - "backend-rust/**"
+      - "docker/Dockerfile.rust"
+      - ".github/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ai-gatekeeper:
+    name: AI Pre-Build Review
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run GitHub Models AI Review
+        run: python3 .github/scripts/ai_reviewer.py
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-test:
+    name: Docker Compile & Image Build Test
+    needs: ai-gatekeeper
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker Image Test (Multi-Stage Rust + FFmpeg)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/Dockerfile.rust
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
