@@ -6,6 +6,7 @@ on:
       - feat/merger
     paths:
       - "backend-rust/**"
+      - "frontend-svelte/**"
       - "docker/Dockerfile.rust"
       - ".github/**"
   workflow_dispatch:
