@@ -99,13 +99,25 @@ pub async fn bulk_download(
     let (writer, reader) = tokio::io::duplex(64 * 1024);
 
     tokio::spawn(async move {
+        use futures_util::AsyncWriteExt;
+        use tokio::io::AsyncReadExt;
+
         let mut zip = ZipFileWriter::with_tokio(writer);
 
         for (name, path) in files_to_zip {
             if let Ok(mut file) = File::open(&path).await {
                 let builder = ZipEntryBuilder::new(name.into(), Compression::Deflate);
                 if let Ok(mut entry_writer) = zip.write_entry_stream(builder).await {
-                    let _ = tokio::io::copy(&mut file, &mut entry_writer).await;
+                    let mut buf = [0u8; 64 * 1024];
+                    loop {
+                        let n = file.read(&mut buf).await.unwrap_or(0);
+                        if n == 0 {
+                            break;
+                        }
+                        if entry_writer.write_all(&buf[..n]).await.is_err() {
+                            break;
+                        }
+                    }
                     let _ = entry_writer.close().await;
                 }
             }

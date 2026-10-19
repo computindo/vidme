@@ -7,8 +7,7 @@ pub fn is_codec_allowed(codec: &str) -> bool {
     lower == "h264" || lower == "avc1"
 }
 
-fn parse_rate(rate_str: Option<&str>) -> Option<f64> {
-    let s = rate_str?;
+fn parse_rate(s: &str) -> Option<f64> {
     if s.is_empty() || s == "0/0" {
         return None;
     }

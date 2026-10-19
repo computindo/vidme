@@ -57,11 +57,12 @@ pub async fn webdav_handler(
         return auth_challenge();
     }
 
-    let uri_path = req.uri().path();
-    let sub_path = uri_path
+    let req_uri_path = req.uri().path().to_string();
+    let sub_path = req_uri_path
         .strip_prefix("/webdav")
-        .unwrap_or(uri_path)
-        .trim_matches('/');
+        .unwrap_or(&req_uri_path)
+        .trim_matches('/')
+        .to_string();
 
     let inbox_dir = format!("{}/webdav-inbox", state.config.storage_path);
     let _ = fs::create_dir_all(&inbox_dir).await;
@@ -76,27 +77,27 @@ pub async fn webdav_handler(
             .unwrap(),
 
         m if m.as_str() == "PROPFIND" => {
-            handle_propfind(&inbox_dir, sub_path, &headers).await
+            handle_propfind(&inbox_dir, &sub_path, &headers).await
         }
 
         m if m.as_str() == "MKCOL" => {
-            handle_mkcol(&state, &inbox_dir, sub_path).await
+            handle_mkcol(&state, &inbox_dir, &sub_path).await
         }
 
         Method::PUT => {
             let body_bytes = axum::body::to_bytes(req.into_body(), 500 * 1024 * 1024)
                 .await
                 .unwrap_or_default();
-            handle_put(&state, &inbox_dir, sub_path, body_bytes).await
+            handle_put(&state, &inbox_dir, &sub_path, body_bytes).await
         }
 
-        Method::GET => handle_get(&inbox_dir, sub_path).await,
+        Method::GET => handle_get(&inbox_dir, &sub_path).await,
 
         Method::DELETE => {
             let target_path = if sub_path.is_empty() {
                 PathBuf::from(&inbox_dir)
             } else {
-                PathBuf::from(&inbox_dir).join(sub_path)
+                PathBuf::from(&inbox_dir).join(&sub_path)
             };
             if fs::try_exists(&target_path).await.unwrap_or(false) {
                 if let Ok(meta) = fs::metadata(&target_path).await {
@@ -255,7 +256,7 @@ async fn handle_mkcol(state: &AppState, inbox_dir: &str, sub_path: &str) -> Resp
 }
 
 async fn handle_put(
-    state: &AppState,
+    _state: &AppState,
     inbox_dir: &str,
     sub_path: &str,
     body: Bytes,
