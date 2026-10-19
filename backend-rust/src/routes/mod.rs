@@ -1,6 +1,7 @@
 pub mod videos;
 pub mod folders;
 pub mod stream;
+pub mod upload_tus;
 
 use axum::{
     routing::get,
