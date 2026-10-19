@@ -39,13 +39,35 @@ pub struct FolderTree {
     pub children: Vec<FolderTree>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct UpdateVideoPayload {
     pub title: Option<String>,
     pub folder_id: Option<Option<String>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct PinVideoPayload {
     pub is_pinned: Option<bool>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CreateFolderPayload {
+    pub name: String,
+    pub parent_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct UpdateFolderPayload {
+    pub name: Option<String>,
+    pub parent_id: Option<Option<String>>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct VideoMeta {
+    pub duration: Option<i64>,
+    pub width: Option<i64>,
+    pub height: Option<i64>,
+    pub is_portrait: bool,
+    pub fps: Option<f64>,
+    pub codec: Option<String>,
 }

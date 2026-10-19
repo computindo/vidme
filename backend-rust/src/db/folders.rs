@@ -1,4 +1,4 @@
-use super::models::{Folder, FolderTree};
+use super::models::{CreateFolderPayload, Folder, FolderTree, UpdateFolderPayload};
 use sqlx::SqlitePool;
 use std::collections::HashMap;
 
@@ -9,7 +9,6 @@ pub async fn list_folders_tree(pool: &SqlitePool) -> Result<Vec<FolderTree>, sql
     .fetch_all(pool)
     .await?;
 
-    // Query count video per folder
     let counts: Vec<(Option<String>, i64)> = sqlx::query_as(
         "SELECT folder_id, COUNT(*) as count FROM videos WHERE folder_id IS NOT NULL GROUP BY folder_id"
     )
@@ -21,7 +20,6 @@ pub async fn list_folders_tree(pool: &SqlitePool) -> Result<Vec<FolderTree>, sql
         .filter_map(|(fid, cnt)| fid.map(|id| (id, cnt)))
         .collect();
 
-    // Bangun tree struktur
     let mut tree_nodes: HashMap<String, FolderTree> = HashMap::new();
     for f in &folders {
         let v_count = count_map.get(&f.id).copied().unwrap_or(0);
@@ -68,4 +66,112 @@ pub async fn list_folders_tree(pool: &SqlitePool) -> Result<Vec<FolderTree>, sql
     }
 
     Ok(roots)
+}
+
+pub async fn get_folder(pool: &SqlitePool, id: &str) -> Result<Option<Folder>, sqlx::Error> {
+    sqlx::query_as::<_, Folder>("SELECT id, name, parent_id, created_at FROM folders WHERE id = ?")
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+}
+
+pub async fn find_folder_by_name_and_parent(
+    pool: &SqlitePool,
+    name: &str,
+    parent_id: Option<&str>,
+) -> Result<Option<Folder>, sqlx::Error> {
+    match parent_id {
+        Some(pid) => {
+            sqlx::query_as::<_, Folder>(
+                "SELECT id, name, parent_id, created_at FROM folders WHERE name = ? AND parent_id = ?"
+            )
+            .bind(name)
+            .bind(pid)
+            .fetch_optional(pool)
+            .await
+        }
+        None => {
+            sqlx::query_as::<_, Folder>(
+                "SELECT id, name, parent_id, created_at FROM folders WHERE name = ? AND parent_id IS NULL"
+            )
+            .bind(name)
+            .fetch_optional(pool)
+            .await
+        }
+    }
+}
+
+pub async fn create_folder(
+    pool: &SqlitePool,
+    id: &str,
+    name: &str,
+    parent_id: Option<&str>,
+) -> Result<Folder, sqlx::Error> {
+    sqlx::query("INSERT INTO folders (id, name, parent_id) VALUES (?, ?, ?)")
+        .bind(id)
+        .bind(name)
+        .bind(parent_id)
+        .execute(pool)
+        .await?;
+
+    get_folder(pool, id).await.map(|f| f.unwrap())
+}
+
+pub async fn update_folder(
+    pool: &SqlitePool,
+    id: &str,
+    payload: &UpdateFolderPayload,
+) -> Result<Option<Folder>, sqlx::Error> {
+    let current = get_folder(pool, id).await?;
+    let Some(mut folder) = current else {
+        return Ok(None);
+    };
+
+    if let Some(ref name) = payload.name {
+        let trimmed = name.trim();
+        if !trimmed.is_empty() {
+            sqlx::query("UPDATE folders SET name = ? WHERE id = ?")
+                .bind(trimmed)
+                .bind(id)
+                .execute(pool)
+                .await?;
+            folder.name = trimmed.to_string();
+        }
+    }
+
+    if let Some(ref parent_opt) = payload.parent_id {
+        match parent_opt {
+            Some(pid) => {
+                sqlx::query("UPDATE folders SET parent_id = ? WHERE id = ?")
+                    .bind(pid)
+                    .bind(id)
+                    .execute(pool)
+                    .await?;
+                folder.parent_id = Some(pid.clone());
+            }
+            None => {
+                sqlx::query("UPDATE folders SET parent_id = NULL WHERE id = ?")
+                    .bind(id)
+                    .execute(pool)
+                    .await?;
+                folder.parent_id = None;
+            }
+        }
+    }
+
+    Ok(Some(folder))
+}
+
+pub async fn delete_folder(pool: &SqlitePool, id: &str) -> Result<bool, sqlx::Error> {
+    sqlx::query("UPDATE videos SET folder_id = NULL WHERE folder_id = ?")
+        .bind(id)
+        .execute(pool)
+        .await?;
+
+    let res = sqlx::query("DELETE FROM folders WHERE id = ?")
+        .bind(id)
+        .execute(pool)
+        .await?;
+
+    Ok(res.rows_affected() > 0)
 }
