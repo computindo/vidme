@@ -15,6 +15,7 @@ tower = { version = "0.4", features = ["util"] }
 tower-http = { version = "0.5", features = ["cors", "trace", "fs"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
 uuid = { version = "1.8", features = ["v4", "fast-rng"] }
 futures-util = "0.3"
 async-stream = "0.3"

@@ -1,9 +1,3 @@
-mod config;
-mod db;
-mod media;
-mod routes;
-mod state;
-
 use axum::{
     body::Body,
     http::{header, StatusCode, Uri},
@@ -11,12 +5,11 @@ use axum::{
     routing::get,
     Router,
 };
-use config::Config;
-use state::AppState;
-use std::{net::SocketAddr, path::Path, sync::Arc};
+use std::{net::SocketAddr, path::Path};
 use tokio::sync::mpsc;
 use tower_http::{cors::CorsLayer, services::ServeDir};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use vidme_backend::{config::Config, db, media, routes, state::AppState};
 
 fn resolve_frontend_path() -> String {
     if Path::new("/app/frontend").exists() {
@@ -77,15 +70,26 @@ async fn serve_player(frontend_path: String) -> Response {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = Config::from_env();
+    let log_dir = format!("{}/logs", config.storage_path);
+    let _ = tokio::fs::create_dir_all(&log_dir).await;
+
+    let file_appender = tracing_appender::rolling::never(&log_dir, "app.log");
+    let (non_blocking, _log_guard) = tracing_appender::non_blocking(file_appender);
+
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| "vidme_backend=info,tower_http=info".into()),
         )
-        .with(tracing_subscriber::fmt::layer())
+        .with(tracing_subscriber::fmt::layer().with_ansi(true))
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(non_blocking),
+        )
         .init();
 
-    let config = Config::from_env();
     tracing::info!(
         "Initializing SQLite database at {}/vidme.sqlite",
         config.storage_path
@@ -94,9 +98,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db_path = format!("{}/vidme.sqlite", config.storage_path);
     let pool = db::init_pool(&db_path).await?;
 
+    // Create background worker channel
     let (worker_tx, worker_rx) = mpsc::channel(100);
     let (state, _sse_rx) = AppState::new(pool.clone(), config.clone(), worker_tx.clone());
 
+    // Spawn media worker
     media::worker::spawn_media_worker(
         pool.clone(),
         state.config.clone(),
@@ -104,6 +110,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         worker_rx,
     );
 
+    // Spawn WebDAV inbox watcher
     media::watcher::spawn_inbox_watcher(
         pool,
         state.config.clone(),
