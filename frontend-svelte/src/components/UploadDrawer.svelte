@@ -20,9 +20,18 @@
         progress: 0,
         status: 'queued',
         error: null,
+        controller: new AbortController(),
       });
     }
     processQueue();
+  }
+
+  function cancelUpload(item) {
+    if (item.status === 'uploading') {
+      item.controller.abort();
+    }
+    item.status = 'cancelled';
+    uploadQueue = uploadQueue.filter((q) => q.id !== item.id);
   }
 
   async function processQueue() {
@@ -35,17 +44,26 @@
     currentUpload = nextItem;
 
     try {
-      await uploadTusFile(nextItem.file, appState.activeFolderId, (prog) => {
-        nextItem.progress = prog.progress;
-        nextItem.speed = prog.speed;
-        nextItem.eta = prog.eta;
-      });
+      await uploadTusFile(
+        nextItem.file,
+        appState.activeFolderId,
+        (prog) => {
+          nextItem.progress = prog.progress;
+          nextItem.speed = prog.speed;
+          nextItem.eta = prog.eta;
+        },
+        nextItem.controller.signal
+      );
       nextItem.status = 'done';
       appState.addToast(`Upload selesai: ${nextItem.name}`, 'success');
     } catch (err) {
-      nextItem.status = 'error';
-      nextItem.error = err.message;
-      appState.addToast(`Gagal: ${err.message}`, 'error');
+      if (nextItem.controller.signal.aborted) {
+        nextItem.status = 'cancelled';
+      } else {
+        nextItem.status = 'error';
+        nextItem.error = err.message;
+        appState.addToast(`Gagal: ${err.message}`, 'error');
+      }
     } finally {
       isUploading = false;
       currentUpload = null;
@@ -116,7 +134,16 @@
             <div class="rounded-lg border border-theme-border bg-theme-card p-3">
               <div class="flex items-center justify-between text-xs">
                 <span class="font-semibold text-slate-200 line-clamp-1">{item.name}</span>
-                <span class="text-theme-muted">{formatBytes(item.size)}</span>
+                <div class="flex items-center gap-2">
+                  <span class="text-theme-muted">{formatBytes(item.size)}</span>
+                  <button
+                    onclick={() => cancelUpload(item)}
+                    class="flex h-5 w-5 items-center justify-center rounded text-theme-muted hover:bg-theme-border hover:text-white"
+                    title="Batalkan"
+                  >
+                    <span class="material-symbols text-sm">close</span>
+                  </button>
+                </div>
               </div>
 
               {#if item.status === 'uploading'}

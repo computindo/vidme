@@ -17,10 +17,40 @@
   function goToSlide(idx) {
     currentIndex = idx;
   }
+
+  let touchStartX = 0;
+  let touchStartY = 0;
+
+  function handleTouchStart(e) {
+    if (e.touches && e.touches.length > 0) {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    }
+  }
+
+  function handleTouchEnd(e) {
+    if (e.changedTouches && e.changedTouches.length > 0) {
+      const deltaX = e.changedTouches[0].clientX - touchStartX;
+      const deltaY = e.changedTouches[0].clientY - touchStartY;
+      if (Math.abs(deltaX) > 40 && Math.abs(deltaX) > Math.abs(deltaY)) {
+        if (deltaX < 0) {
+          nextSlide();
+        } else {
+          prevSlide();
+        }
+      }
+    }
+  }
 </script>
 
 {#if slides.length > 0}
-  <div class="relative mx-auto my-6 w-full max-w-5xl px-4">
+  <div
+    role="region"
+    aria-label="Recent uploads carousel"
+    class="relative mx-auto my-6 w-full max-w-5xl px-4"
+    ontouchstart={handleTouchStart}
+    ontouchend={handleTouchEnd}
+  >
     <div class="relative overflow-hidden rounded-2xl border border-theme-border bg-theme-surface shadow-2xl">
       <div class="relative aspect-video w-full overflow-hidden bg-black">
         {#each slides as slide, idx (slide.id)}

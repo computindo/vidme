@@ -142,6 +142,24 @@ pub async fn update_folder(
     if let Some(ref parent_opt) = payload.parent_id {
         match parent_opt {
             Some(pid) => {
+                if pid == id {
+                    return Err(sqlx::Error::Protocol("Cannot set folder as its own parent".into()));
+                }
+                // Check cycle: ensure `id` is not an ancestor of `pid`
+                let mut check_id = Some(pid.clone());
+                while let Some(curr_check) = check_id {
+                    if curr_check == id {
+                        return Err(sqlx::Error::Protocol("Circular folder reference detected".into()));
+                    }
+                    let ancestor: Option<(Option<String>,)> = sqlx::query_as(
+                        "SELECT parent_id FROM folders WHERE id = ?"
+                    )
+                    .bind(&curr_check)
+                    .fetch_optional(pool)
+                    .await?;
+                    check_id = ancestor.and_then(|a| a.0);
+                }
+
                 sqlx::query("UPDATE folders SET parent_id = ? WHERE id = ?")
                     .bind(pid)
                     .bind(id)
@@ -163,11 +181,25 @@ pub async fn update_folder(
 }
 
 pub async fn delete_folder(pool: &SqlitePool, id: &str) -> Result<bool, sqlx::Error> {
+    let folder = get_folder(pool, id).await?;
+    let Some(f) = folder else {
+        return Ok(false);
+    };
+
+    // Reparent child folders to deleted folder's parent
+    sqlx::query("UPDATE folders SET parent_id = ? WHERE parent_id = ?")
+        .bind(&f.parent_id)
+        .bind(id)
+        .execute(pool)
+        .await?;
+
+    // Unassign videos from deleted folder
     sqlx::query("UPDATE videos SET folder_id = NULL WHERE folder_id = ?")
         .bind(id)
         .execute(pool)
         .await?;
 
+    // Delete folder
     let res = sqlx::query("DELETE FROM folders WHERE id = ?")
         .bind(id)
         .execute(pool)

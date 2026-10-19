@@ -20,6 +20,13 @@
   let holdTimer = null;
   let previousRate = 1.0;
 
+  let isScrubbing = $state(false);
+  let wasPlayingBeforeScrub = false;
+  let lastTapLeft = 0;
+  let lastTapRight = 0;
+  let skipFeedback = $state(null);
+  let feedbackTimer = null;
+
   let isEditingTitle = $state(false);
   let editedTitle = $state('');
 
@@ -33,16 +40,71 @@
   }
 
   function handleTimeUpdate() {
-    if (!videoEl) return;
+    if (!videoEl || isScrubbing) return;
     currentTime = videoEl.currentTime;
     duration = videoEl.duration || 0;
   }
 
-  function handleSeek(e) {
+  function handleScrubberPointerDown(e) {
     if (!videoEl) return;
+    isScrubbing = true;
+    wasPlayingBeforeScrub = !videoEl.paused;
+    if (wasPlayingBeforeScrub) videoEl.pause();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    seekFromPointer(e);
+  }
+
+  function handleScrubberPointerMove(e) {
+    if (!isScrubbing) return;
+    seekFromPointer(e);
+  }
+
+  function handleScrubberPointerUp(e) {
+    if (!isScrubbing) return;
+    seekFromPointer(e);
+    isScrubbing = false;
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch (_) {}
+    if (wasPlayingBeforeScrub && videoEl) {
+      videoEl.play();
+    }
+  }
+
+  function seekFromPointer(e) {
     const rect = e.currentTarget.getBoundingClientRect();
-    const pos = (e.clientX - rect.left) / rect.width;
-    videoEl.currentTime = pos * (videoEl.duration || 0);
+    const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const targetTime = pos * (duration || 0);
+    currentTime = targetTime;
+    if (videoEl) {
+      videoEl.currentTime = targetTime;
+    }
+  }
+
+  function handleLeftTap() {
+    const now = Date.now();
+    if (now - lastTapLeft < 300) {
+      skipTime(-5);
+      showSkipFeedback('-5s', 'left');
+    }
+    lastTapLeft = now;
+  }
+
+  function handleRightTap() {
+    const now = Date.now();
+    if (now - lastTapRight < 300) {
+      skipTime(5);
+      showSkipFeedback('+5s', 'right');
+    }
+    lastTapRight = now;
+  }
+
+  function showSkipFeedback(text, side) {
+    clearTimeout(feedbackTimer);
+    skipFeedback = { text, side };
+    feedbackTimer = setTimeout(() => {
+      skipFeedback = null;
+    }, 700);
   }
 
   function toggleMute() {
@@ -212,8 +274,26 @@
       </div>
     {/if}
 
+    {#if skipFeedback}
+      <div class="pointer-events-none absolute top-1/2 z-30 flex -translate-y-1/2 items-center gap-2 rounded-full bg-black/80 px-4 py-2 text-sm font-bold text-white shadow-lg backdrop-blur-md animate-ping {skipFeedback.side === 'left' ? 'left-12' : 'right-12'}">
+        <span>{skipFeedback.text}</span>
+      </div>
+    {/if}
+
+    <!-- Double-tap seek zones on left & right -->
     <div
-      class="absolute inset-0 flex flex-col justify-between bg-gradient-to-t from-black/80 via-transparent to-black/40 p-4 transition-opacity duration-300 {showControls || !isPlaying ? 'opacity-100' : 'opacity-0 pointer-events-none'}"
+      role="presentation"
+      class="absolute inset-y-0 left-0 w-1/4 z-10"
+      onclick={handleLeftTap}
+    ></div>
+    <div
+      role="presentation"
+      class="absolute inset-y-0 right-0 w-1/4 z-10"
+      onclick={handleRightTap}
+    ></div>
+
+    <div
+      class="absolute inset-0 flex flex-col justify-between bg-gradient-to-t from-black/80 via-transparent to-black/40 p-4 transition-opacity duration-300 {showControls || !isPlaying ? 'opacity-100 z-20' : 'opacity-0 pointer-events-none'}"
     >
       <div class="flex items-center justify-between">
         <h1 class="text-base font-semibold text-white drop-shadow md:text-lg line-clamp-1">
@@ -231,8 +311,11 @@
           aria-valuemin="0"
           aria-valuemax={duration || 100}
           aria-valuenow={currentTime || 0}
-          class="group/timeline relative flex h-3 w-full cursor-pointer items-center"
-          onclick={handleSeek}
+          class="group/timeline relative flex h-3 w-full cursor-pointer items-center touch-none"
+          onpointerdown={handleScrubberPointerDown}
+          onpointermove={handleScrubberPointerMove}
+          onpointerup={handleScrubberPointerUp}
+          onpointercancel={handleScrubberPointerUp}
           onkeydown={(e) => {
             if (e.key === 'ArrowLeft') skipTime(-5);
             if (e.key === 'ArrowRight') skipTime(5);

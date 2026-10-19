@@ -7,6 +7,7 @@ class GlobalState {
   virtualView = $state(null); // 'portrait', 'landscape', 'uncategorized'
   searchQuery = $state('');
   page = $state(1);
+  isPageMode = $state(false);
   sidebarOpen = $state(true);
   uploadDrawerOpen = $state(false);
   activeUploads = $state([]);
@@ -70,6 +71,9 @@ class GlobalState {
   }
 
   navigate(path) {
+    if (!this.activeVideoId && path.includes('/v/')) {
+      sessionStorage.setItem('vidme-scroll-pos', String(window.scrollY));
+    }
     if (window.location.pathname + window.location.search !== path) {
       window.history.pushState(null, '', path);
     }
@@ -79,19 +83,33 @@ class GlobalState {
   parseCurrentUrl() {
     const path = window.location.pathname;
     const searchParams = new URLSearchParams(window.location.search);
+    this.isPageMode = searchParams.has('page');
     const pageParam = parseInt(searchParams.get('page') || '1', 10);
     this.page = pageParam > 0 ? pageParam : 1;
 
     // Check player URL: /v/:id or /:slug/v/:id or /library/:view/v/:id
     const vMatch = path.match(/(?:\/.*)?\/v\/([^/]+)/);
     if (vMatch) {
+      if (!this.activeVideoId) {
+        sessionStorage.setItem('vidme-scroll-pos', String(window.scrollY));
+      }
       this.activeVideoId = vMatch[1];
       this.currentRoute = 'player';
       return;
     }
 
+    const wasPlayer = this.currentRoute === 'player';
     this.activeVideoId = null;
     this.currentRoute = 'grid';
+
+    if (wasPlayer) {
+      const saved = sessionStorage.getItem('vidme-scroll-pos');
+      if (saved) {
+        requestAnimationFrame(() => {
+          window.scrollTo(0, parseInt(saved, 10));
+        });
+      }
+    }
 
     // Check library URL: /library/:view
     const libMatch = path.match(/^\/library\/(portrait|landscape|uncategorized)/);

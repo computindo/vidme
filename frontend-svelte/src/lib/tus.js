@@ -6,8 +6,8 @@ export async function detectVideoCodec(file) {
   const headBytes = new Uint8Array(headBuf);
 
   const isAvc = (bytes) => {
-    const s = String.fromCharCode(...bytes);
-    return s.includes('avc1') || s.includes('avc3') || s.includes('avc4') || s.includes('h264');
+    const s = Array.from(bytes.subarray(0, 200000)).map((b) => String.fromCharCode(b)).join('');
+    return s.includes('avc1') || s.includes('avc3') || s.includes('avc4') || s.includes('h264') || s.includes('H264');
   };
 
   if (isAvc(headBytes)) return true;
@@ -18,14 +18,20 @@ export async function detectVideoCodec(file) {
     if (isAvc(new Uint8Array(tailBuf))) return true;
   }
 
-  if (file.type === 'video/mp4' || file.name.endsWith('.mp4')) {
-    return true;
-  }
-
   return false;
 }
 
-export async function uploadTusFile(file, folderId, onProgress) {
+export async function abortTusUpload(location) {
+  if (!location) return;
+  try {
+    await fetch(location, {
+      method: 'DELETE',
+      headers: { 'Tus-Resumable': '1.0.0' },
+    });
+  } catch (_) {}
+}
+
+export async function uploadTusFile(file, folderId, onProgress, signal) {
   const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB chunks
   const isAllowed = await detectVideoCodec(file);
   if (!isAllowed) {
@@ -46,6 +52,7 @@ export async function uploadTusFile(file, folderId, onProgress) {
       'Upload-Length': String(file.size),
       'Upload-Metadata': meta,
     },
+    signal,
   });
 
   if (!createRes.ok) {
@@ -61,6 +68,11 @@ export async function uploadTusFile(file, folderId, onProgress) {
   let speedEma = 0;
 
   while (offset < file.size) {
+    if (signal?.aborted) {
+      await abortTusUpload(location);
+      throw new Error('Upload dibatalkan');
+    }
+
     const chunkEnd = Math.min(offset + CHUNK_SIZE, file.size);
     const chunkBlob = file.slice(offset, chunkEnd);
     const chunkStart = Date.now();
@@ -69,6 +81,10 @@ export async function uploadTusFile(file, folderId, onProgress) {
     let attempts = 0;
 
     while (attempts < 5) {
+      if (signal?.aborted) {
+        await abortTusUpload(location);
+        throw new Error('Upload dibatalkan');
+      }
       attempts++;
       try {
         patchRes = await fetch(location, {
@@ -79,15 +95,20 @@ export async function uploadTusFile(file, folderId, onProgress) {
             'Content-Type': 'application/offset+octet-stream',
           },
           body: chunkBlob,
+          signal,
         });
 
         if (patchRes.ok) break;
         if (patchRes.status === 409) {
-          const headRes = await fetch(location, { method: 'HEAD', headers: { 'Tus-Resumable': '1.0.0' } });
+          const headRes = await fetch(location, { method: 'HEAD', headers: { 'Tus-Resumable': '1.0.0' }, signal });
           const newOff = headRes.headers.get('Upload-Offset');
           if (newOff) offset = parseInt(newOff, 10);
         }
       } catch (err) {
+        if (signal?.aborted) {
+          await abortTusUpload(location);
+          throw new Error('Upload dibatalkan');
+        }
         if (attempts >= 5) throw err;
       }
       await new Promise((r) => setTimeout(r, Math.pow(2, attempts) * 500));

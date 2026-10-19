@@ -1,11 +1,12 @@
 use axum::{
-    body::{Body, Bytes},
-    extract::{Path, Request, State},
+    body::Body,
+    extract::{Request, State},
     http::{header, HeaderMap, Method, StatusCode},
-    response::{IntoResponse, Response},
+    response::Response,
 };
 use base64::Engine;
-use std::path::{Path as StdPath, PathBuf};
+use futures_util::StreamExt;
+use std::path::PathBuf;
 use tokio::fs::{self, File};
 use tokio::io::AsyncWriteExt;
 use tokio_util::io::ReaderStream;
@@ -85,10 +86,7 @@ pub async fn webdav_handler(
         }
 
         Method::PUT => {
-            let body_bytes = axum::body::to_bytes(req.into_body(), 500 * 1024 * 1024)
-                .await
-                .unwrap_or_default();
-            handle_put(&state, &inbox_dir, &sub_path, body_bytes).await
+            handle_put(&state, &inbox_dir, &sub_path, req.into_body()).await
         }
 
         Method::GET => handle_get(&inbox_dir, &sub_path).await,
@@ -256,10 +254,10 @@ async fn handle_mkcol(state: &AppState, inbox_dir: &str, sub_path: &str) -> Resp
 }
 
 async fn handle_put(
-    _state: &AppState,
+    state: &AppState,
     inbox_dir: &str,
     sub_path: &str,
-    body: Bytes,
+    body: Body,
 ) -> Response {
     if sub_path.is_empty() {
         return Response::builder()
@@ -271,27 +269,60 @@ async fn handle_put(
     let target_path = PathBuf::from(inbox_dir).join(sub_path);
     if let Some(parent) = target_path.parent() {
         let _ = fs::create_dir_all(parent).await;
+
+        // Attribute folder if upload is inside a subfolder
+        if let Some(parent_name) = parent.file_name().and_then(|n| n.to_str()) {
+            if parent_name != "webdav-inbox" && !parent_name.is_empty() {
+                if let Ok(Some(row)) = sqlx::query_as::<_, (String,)>("SELECT id FROM folders WHERE name = ?")
+                    .bind(parent_name)
+                    .fetch_optional(&state.pool)
+                    .await
+                {
+                    let sidecar = format!("{}.folderid", target_path.display());
+                    let _ = fs::write(&sidecar, row.0).await;
+                }
+            }
+        }
     }
 
-    match File::create(&target_path).await {
-        Ok(mut file) => {
-            if let Err(e) = file.write_all(&body).await {
+    let mut file = match File::create(&target_path).await {
+        Ok(f) => f,
+        Err(e) => {
+            return Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Body::from(e.to_string()))
+                .unwrap();
+        }
+    };
+
+    let mut stream = body.into_data_stream();
+    while let Some(chunk_res) = stream.next().await {
+        match chunk_res {
+            Ok(chunk) => {
+                if let Err(e) = file.write_all(&chunk).await {
+                    let _ = fs::remove_file(&target_path).await;
+                    return Response::builder()
+                        .status(StatusCode::INTERNAL_SERVER_ERROR)
+                        .body(Body::from(e.to_string()))
+                        .unwrap();
+                }
+            }
+            Err(e) => {
                 let _ = fs::remove_file(&target_path).await;
                 return Response::builder()
-                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .status(StatusCode::BAD_REQUEST)
                     .body(Body::from(e.to_string()))
                     .unwrap();
             }
-            Response::builder()
-                .status(StatusCode::CREATED)
-                .body(Body::empty())
-                .unwrap()
         }
-        Err(e) => Response::builder()
-            .status(StatusCode::INTERNAL_SERVER_ERROR)
-            .body(Body::from(e.to_string()))
-            .unwrap(),
     }
+
+    let _ = file.flush().await;
+
+    Response::builder()
+        .status(StatusCode::CREATED)
+        .body(Body::empty())
+        .unwrap()
 }
 
 async fn handle_get(inbox_dir: &str, sub_path: &str) -> Response {

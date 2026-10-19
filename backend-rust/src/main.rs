@@ -118,6 +118,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         worker_tx,
     );
 
+    // Spawn TUS abandoned chunks GC (runs every 30m)
+    routes::upload_tus::spawn_tus_gc(state.config.storage_path.clone());
+
     let frontend_dir = resolve_frontend_path();
     tracing::info!("Serving frontend assets from: {}", frontend_dir);
 

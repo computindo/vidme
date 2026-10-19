@@ -7,7 +7,7 @@ pub mod videos;
 pub mod webdav;
 
 use axum::{
-    routing::{delete, get, patch, post},
+    routing::{get, patch, post},
     Router,
 };
 use crate::state::AppState;

@@ -90,6 +90,14 @@ pub async fn delete_video(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let video = videos::get_video(&state.pool, &id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let Some(v) = video else {
+        return Err((StatusCode::NOT_FOUND, "Video not found".to_string()));
+    };
+
     let deleted = videos::delete_video(&state.pool, &id)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -103,17 +111,26 @@ pub async fn delete_video(
     let thumb = format!("{}/thumbnails/{}.jpg", storage, id);
     let storyboard = format!("{}/thumbnails/{}.storyboard.jpg", storage, id);
     let clip = format!("{}/thumbnails/{}.clip.webm", storage, id);
+    let staging = format!("{}/staging/{}.mp4", storage, id);
+    let orig = format!("{}/original/{}", storage, v.filename);
 
     let _ = tokio::fs::remove_file(transcoded).await;
     let _ = tokio::fs::remove_file(thumb).await;
     let _ = tokio::fs::remove_file(storyboard).await;
     let _ = tokio::fs::remove_file(clip).await;
+    let _ = tokio::fs::remove_file(staging).await;
+    let _ = tokio::fs::remove_file(orig).await;
 
     let sse_msg = serde_json::json!({
         "type": "video:deleted",
         "id": id
     });
     let _ = state.sse_tx.send(sse_msg.to_string());
+    let sse_msg_legacy = serde_json::json!({
+        "type": "video-deleted",
+        "id": id
+    });
+    let _ = state.sse_tx.send(sse_msg_legacy.to_string());
 
     Ok(Json(serde_json::json!({ "success": true })))
 }

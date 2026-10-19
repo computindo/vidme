@@ -30,7 +30,7 @@ pub async fn probe_video(file_path: &str) -> Result<VideoMeta, String> {
             "-v",
             "error",
             "-show_entries",
-            "format=duration:stream=width,height,codec_name,r_frame_rate,avg_frame_rate",
+            "format=duration:stream=width,height,codec_name,r_frame_rate,avg_frame_rate,side_data_list:stream_side_data=rotation:stream_tags=rotate",
             "-of",
             "json",
             file_path,
@@ -64,12 +64,37 @@ pub async fn probe_video(file_path: &str) -> Result<VideoMeta, String> {
         .find(|s| s.get("width").is_some() && s.get("height").is_some())
         .ok_or_else(|| "No video stream found".to_string())?;
 
-    let width = video_stream.get("width").and_then(|w| w.as_i64());
-    let height = video_stream.get("height").and_then(|h| h.as_i64());
+    let mut width = video_stream.get("width").and_then(|w| w.as_i64());
+    let mut height = video_stream.get("height").and_then(|h| h.as_i64());
     let codec = video_stream
         .get("codec_name")
         .and_then(|c| c.as_str())
         .map(|s| s.to_string());
+
+    // Check side_data_list rotation or tags.rotate
+    let mut rotation_deg: Option<i64> = None;
+    if let Some(side_data) = video_stream.get("side_data_list").and_then(|sd| sd.as_array()) {
+        for sd in side_data {
+            if let Some(rot) = sd.get("rotation").and_then(|r| r.as_i64().or_else(|| r.as_f64().map(|f| f as i64))) {
+                rotation_deg = Some(rot);
+                break;
+            }
+        }
+    }
+    if rotation_deg.is_none() {
+        if let Some(tags) = video_stream.get("tags") {
+            if let Some(rot_str) = tags.get("rotate").and_then(|r| r.as_str()) {
+                rotation_deg = rot_str.parse::<i64>().ok();
+            }
+        }
+    }
+
+    if let Some(deg) = rotation_deg {
+        let normalized = ((deg % 360) + 360) % 360;
+        if normalized == 90 || normalized == 270 {
+            std::mem::swap(&mut width, &mut height);
+        }
+    }
 
     let r_fps = video_stream
         .get("r_frame_rate")

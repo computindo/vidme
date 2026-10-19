@@ -2,6 +2,7 @@
   import { appState } from '../lib/state.svelte.js';
 
   let localSearch = $state(appState.searchQuery);
+  let mobileSearchOpen = $state(false);
   let debounceTimer = null;
 
   function handleSearchInput(e) {
@@ -65,6 +66,13 @@
 
   <div class="flex items-center gap-2">
     <button
+      class="flex h-10 w-10 items-center justify-center rounded-lg text-theme-muted hover:bg-theme-card hover:text-white md:hidden"
+      onclick={() => (mobileSearchOpen = !mobileSearchOpen)}
+      aria-label="Toggle Search"
+    >
+      <span class="material-symbols">{mobileSearchOpen ? 'close' : 'search'}</span>
+    </button>
+    <button
       onclick={() => (appState.uploadDrawerOpen = !appState.uploadDrawerOpen)}
       class="flex items-center gap-1.5 rounded-full bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-md shadow-indigo-600/20 transition-colors hover:bg-indigo-500 active:scale-95"
     >
@@ -73,3 +81,26 @@
     </button>
   </div>
 </header>
+
+{#if mobileSearchOpen}
+  <div class="sticky top-16 z-20 flex w-full items-center border-b border-theme-border bg-theme-surface/95 px-4 py-2.5 backdrop-blur-md md:hidden">
+    <div class="relative flex w-full items-center">
+      <span class="material-symbols absolute left-3 text-theme-muted">search</span>
+      <input
+        type="text"
+        placeholder="Cari video..."
+        value={localSearch}
+        oninput={handleSearchInput}
+        class="w-full rounded-full border border-theme-border bg-theme-bg py-2 pl-10 pr-10 text-sm text-slate-100 placeholder-theme-muted focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+      />
+      {#if localSearch}
+        <button
+          onclick={clearSearch}
+          class="absolute right-3 flex h-5 w-5 items-center justify-center rounded-full text-theme-muted hover:bg-slate-800 hover:text-white"
+        >
+          <span class="material-symbols text-sm">close</span>
+        </button>
+      {/if}
+    </div>
+  </div>
+{/if}

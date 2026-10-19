@@ -4,7 +4,7 @@
   import VideoCard from './VideoCard.svelte';
 
   const isHomeLanding = $derived(
-    !appState.activeFolderId && !appState.virtualView && !appState.searchQuery && appState.page === 1
+    !appState.activeFolderId && !appState.virtualView && !appState.searchQuery && !appState.isPageMode
   );
 
   const PAGE_SIZE = 20;

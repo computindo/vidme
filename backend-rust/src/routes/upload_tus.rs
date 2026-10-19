@@ -2,11 +2,10 @@ use axum::{
     body::Bytes,
     extract::{Path, State},
     http::{header, HeaderMap, StatusCode},
-    response::{IntoResponse, Response},
+    response::Response,
 };
 use base64::Engine;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 use tokio::fs::{File, OpenOptions};
 use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
@@ -131,18 +130,30 @@ pub async fn get_upload_offset(
     Path(id): Path<String>,
 ) -> Result<Response, (StatusCode, String)> {
     let chunk_path = format!("{}/tus-chunks/{}", state.config.storage_path, id);
+    let meta_path = format!("{}/tus-chunks/{}.meta", state.config.storage_path, id);
     let metadata = tokio::fs::metadata(&chunk_path)
         .await
         .map_err(|_| (StatusCode::NOT_FOUND, "Upload not found".to_string()))?;
 
     let offset = metadata.len();
 
-    Ok(Response::builder()
+    let mut builder = Response::builder()
         .status(StatusCode::OK)
         .header("Tus-Resumable", TUS_VERSION)
         .header("Upload-Offset", offset.to_string())
-        .header(header::CACHE_CONTROL, "no-store")
-        .header(header::ACCESS_CONTROL_EXPOSE_HEADERS, "Upload-Offset, Tus-Resumable")
+        .header(header::CACHE_CONTROL, "no-store");
+
+    if let Ok(meta_str) = tokio::fs::read_to_string(&meta_path).await {
+        if let Ok(meta_info) = serde_json::from_str::<TusUploadMeta>(&meta_str) {
+            builder = builder.header("Upload-Length", meta_info.upload_length.to_string());
+        }
+    }
+
+    Ok(builder
+        .header(
+            header::ACCESS_CONTROL_EXPOSE_HEADERS,
+            "Upload-Offset, Upload-Length, Tus-Resumable",
+        )
         .body(axum::body::Body::empty())
         .unwrap())
 }
@@ -296,4 +307,31 @@ pub async fn terminate_upload(
         .header("Tus-Resumable", TUS_VERSION)
         .body(axum::body::Body::empty())
         .unwrap())
+}
+
+// Background GC to clean up abandoned chunks (>24 hours)
+pub fn spawn_tus_gc(storage_path: String) {
+    tokio::spawn(async move {
+        let chunk_dir = format!("{}/tus-chunks", storage_path);
+        let max_age = std::time::Duration::from_secs(24 * 3600);
+
+        loop {
+            tokio::time::sleep(tokio::time::Duration::from_secs(30 * 60)).await;
+            if let Ok(mut entries) = tokio::fs::read_dir(&chunk_dir).await {
+                while let Ok(Some(entry)) = entries.next_entry().await {
+                    if let Ok(meta) = entry.metadata().await {
+                        if let Ok(modified) = meta.modified() {
+                            if let Ok(age) = modified.elapsed() {
+                                if age > max_age {
+                                    let path = entry.path();
+                                    tracing::info!("Cleaning up expired TUS chunk: {:?}", path);
+                                    let _ = tokio::fs::remove_file(path).await;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
 }
