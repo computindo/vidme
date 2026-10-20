@@ -1,8 +1,8 @@
 <script>
-  import { onMount, onDestroy } from 'svelte';
-  import { appState } from '../lib/state.svelte.js';
-  import { updateVideoTitle } from '../lib/api.js';
-  import { fmt } from '../lib/utils.js';
+  import { onMount, onDestroy } from "svelte";
+  import { appState } from "../lib/state.svelte.js";
+  import { updateVideoTitle } from "../lib/api.js";
+  import { fmt } from "../lib/utils.js";
 
   const video = $derived(appState.activeVideo);
 
@@ -18,25 +18,33 @@
 
   let isHolding2x = $state(false);
   let holdTimer = null;
+  let wasHolding = false;
   let previousRate = 1.0;
 
   let isScrubbing = $state(false);
   let wasPlayingBeforeScrub = false;
   let lastTapLeft = 0;
   let lastTapRight = 0;
+  let tapTimerLeft = null;
+  let tapTimerRight = null;
   let skipFeedback = $state(null);
   let feedbackTimer = null;
 
   let isEditingTitle = $state(false);
-  let editedTitle = $state('');
+  let editedTitle = $state("");
 
   function togglePlay() {
     if (!videoEl) return;
+    if (wasHolding) {
+      wasHolding = false;
+      return;
+    }
     if (videoEl.paused) {
-      videoEl.play();
+      videoEl.play().catch(() => {});
     } else {
       videoEl.pause();
     }
+    resetControlsTimeout();
   }
 
   function handleTimeUpdate() {
@@ -67,7 +75,7 @@
       e.currentTarget.releasePointerCapture(e.pointerId);
     } catch (_) {}
     if (wasPlayingBeforeScrub && videoEl) {
-      videoEl.play();
+      videoEl.play().catch(() => {});
     }
   }
 
@@ -81,22 +89,36 @@
     }
   }
 
-  function handleLeftTap() {
+  function handleLeftTap(e) {
+    e?.stopPropagation?.();
     const now = Date.now();
     if (now - lastTapLeft < 300) {
+      clearTimeout(tapTimerLeft);
       skipTime(-5);
-      showSkipFeedback('-5s', 'left');
+      showSkipFeedback("-5s", "left");
+      lastTapLeft = 0;
+    } else {
+      lastTapLeft = now;
+      tapTimerLeft = setTimeout(() => {
+        togglePlay();
+      }, 300);
     }
-    lastTapLeft = now;
   }
 
-  function handleRightTap() {
+  function handleRightTap(e) {
+    e?.stopPropagation?.();
     const now = Date.now();
     if (now - lastTapRight < 300) {
+      clearTimeout(tapTimerRight);
       skipTime(5);
-      showSkipFeedback('+5s', 'right');
+      showSkipFeedback("+5s", "right");
+      lastTapRight = 0;
+    } else {
+      lastTapRight = now;
+      tapTimerRight = setTimeout(() => {
+        togglePlay();
+      }, 300);
     }
-    lastTapRight = now;
   }
 
   function showSkipFeedback(text, side) {
@@ -114,7 +136,7 @@
   }
 
   function toggleFullscreen() {
-    const wrap = document.getElementById('player-wrapper');
+    const wrap = document.getElementById("player-wrapper");
     if (!document.fullscreenElement) {
       wrap?.requestFullscreen?.();
       isFullscreen = true;
@@ -130,13 +152,15 @@
   }
 
   function handlePointerDown(e) {
-    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    if (e.button !== 0 && e.pointerType === "mouse") return;
+    wasHolding = false;
     clearTimeout(holdTimer);
     holdTimer = setTimeout(() => {
       if (videoEl && !videoEl.paused) {
         previousRate = videoEl.playbackRate;
         videoEl.playbackRate = 2.0;
         isHolding2x = true;
+        wasHolding = true;
       }
     }, 250);
   }
@@ -163,36 +187,36 @@
     if (isEditingTitle) return;
 
     switch (e.key.toLowerCase()) {
-      case ' ':
-      case 'k':
+      case " ":
+      case "k":
         e.preventDefault();
         togglePlay();
         break;
-      case 'arrowleft':
+      case "arrowleft":
         e.preventDefault();
         skipTime(-5);
         break;
-      case 'arrowright':
+      case "arrowright":
         e.preventDefault();
         skipTime(5);
         break;
-      case 'j':
+      case "j":
         e.preventDefault();
         skipTime(-10);
         break;
-      case 'l':
+      case "l":
         e.preventDefault();
         skipTime(10);
         break;
-      case 'm':
+      case "m":
         e.preventDefault();
         toggleMute();
         break;
-      case 'f':
+      case "f":
         e.preventDefault();
         toggleFullscreen();
         break;
-      case 'escape':
+      case "escape":
         if (isFullscreen) toggleFullscreen();
         break;
     }
@@ -202,7 +226,7 @@
     if (window.history.length > 1) {
       window.history.back();
     } else {
-      appState.navigate('/');
+      appState.navigate("/");
     }
   }
 
@@ -220,13 +244,16 @@
   });
 
   onMount(() => {
-    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
   });
 
   onDestroy(() => {
-    window.removeEventListener('keydown', handleKeyDown);
+    window.removeEventListener("keydown", handleKeyDown);
     clearTimeout(holdTimer);
     clearTimeout(controlsTimeout);
+    clearTimeout(tapTimerLeft);
+    clearTimeout(tapTimerRight);
+    clearTimeout(feedbackTimer);
   });
 </script>
 
@@ -260,7 +287,6 @@
       src={`/stream/${appState.activeVideoId}`}
       class="h-full w-full object-contain cursor-pointer"
       playsinline
-      autoplay
       onplay={() => (isPlaying = true)}
       onpause={() => (isPlaying = false)}
       ontimeupdate={handleTimeUpdate}
@@ -280,30 +306,47 @@
       </div>
     {/if}
 
-    <!-- Double-tap seek zones on left & right -->
+    <!-- Double-tap seek zones on left & right (z-10) -->
     <div
       role="presentation"
-      class="absolute inset-y-0 left-0 w-1/4 z-10"
+      class="absolute inset-y-0 left-0 w-1/4 z-10 cursor-pointer"
       onclick={handleLeftTap}
     ></div>
     <div
       role="presentation"
-      class="absolute inset-y-0 right-0 w-1/4 z-10"
+      class="absolute inset-y-0 right-0 w-1/4 z-10 cursor-pointer"
       onclick={handleRightTap}
     ></div>
 
     <div
-      class="absolute inset-0 flex flex-col justify-between bg-gradient-to-t from-black/80 via-transparent to-black/40 p-4 transition-opacity duration-300 {showControls || !isPlaying ? 'opacity-100 z-20' : 'opacity-0 pointer-events-none'}"
+      class="absolute inset-0 flex flex-col justify-between bg-gradient-to-t from-black/80 via-transparent to-black/40 p-4 transition-opacity duration-300 {showControls || !isPlaying ? 'opacity-100 z-20 pointer-events-auto' : 'opacity-0 pointer-events-none'}"
     >
       <div class="flex items-center justify-between">
         <h1 class="text-base font-semibold text-white drop-shadow md:text-lg line-clamp-1">
-          {video?.title || 'Video Player'}
+          {video?.title || "Video Player"}
         </h1>
       </div>
 
-      <div></div>
+      <!-- Area tengah interaktif: klik untuk toggle play/pause dan tombol play saat pause -->
+      <div
+        role="button"
+        tabindex="0"
+        aria-label={isPlaying ? "Jeda video" : "Putar video"}
+        class="flex-1 w-full cursor-pointer flex items-center justify-center pointer-events-auto"
+        onclick={(e) => {
+          e.stopPropagation();
+          togglePlay();
+        }}
+        onkeydown={(e) => (e.key === " " || e.key === "Enter") && togglePlay()}
+      >
+        {#if !isPlaying}
+          <div class="flex h-16 w-16 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-transform hover:scale-110 shadow-lg">
+            <span class="material-symbols text-4xl">play_arrow</span>
+          </div>
+        {/if}
+      </div>
 
-      <div class="flex flex-col gap-2">
+      <div class="flex flex-col gap-2 pointer-events-auto">
         <div
           role="slider"
           tabindex="0"
@@ -317,8 +360,8 @@
           onpointerup={handleScrubberPointerUp}
           onpointercancel={handleScrubberPointerUp}
           onkeydown={(e) => {
-            if (e.key === 'ArrowLeft') skipTime(-5);
-            if (e.key === 'ArrowRight') skipTime(5);
+            if (e.key === "ArrowLeft") skipTime(-5);
+            if (e.key === "ArrowRight") skipTime(5);
           }}
         >
           <div class="relative h-1 w-full rounded-full bg-white/20 transition-all group-hover/timeline:h-2">
@@ -331,9 +374,9 @@
 
         <div class="flex items-center justify-between text-white">
           <div class="flex items-center gap-3">
-            <button onclick={togglePlay} class="flex items-center justify-center text-white hover:text-indigo-400">
+            <button onclick={togglePlay} class="flex items-center justify-center text-white hover:text-indigo-400" title={isPlaying ? "Pause" : "Play"}>
               <span class="material-symbols text-2xl">
-                {isPlaying ? 'pause' : 'play_arrow'}
+                {isPlaying ? "pause" : "play_arrow"}
               </span>
             </button>
 
@@ -346,9 +389,9 @@
             </button>
 
             <div class="flex items-center gap-1.5">
-              <button onclick={toggleMute} class="flex items-center justify-center text-white hover:text-indigo-400">
+              <button onclick={toggleMute} class="flex items-center justify-center text-white hover:text-indigo-400" title={isMuted ? "Unmute (M)" : "Mute (M)"}>
                 <span class="material-symbols text-xl">
-                  {isMuted ? 'volume_off' : 'volume_up'}
+                  {isMuted ? "volume_off" : "volume_up"}
                 </span>
               </button>
             </div>
@@ -369,7 +412,7 @@
 
             <button onclick={toggleFullscreen} class="flex items-center justify-center text-white hover:text-indigo-400" title="Fullscreen (F)">
               <span class="material-symbols text-xl">
-                {isFullscreen ? 'fullscreen_exit' : 'fullscreen'}
+                {isFullscreen ? "fullscreen_exit" : "fullscreen"}
               </span>
             </button>
           </div>
@@ -402,7 +445,7 @@
     {:else}
       <div class="flex items-start justify-between gap-4">
         <h1 class="text-2xl font-bold tracking-tight text-white md:text-3xl">
-          {video?.title || 'Untitled Video'}
+          {video?.title || "Untitled Video"}
         </h1>
         <button
           onclick={() => (isEditingTitle = true)}
@@ -417,9 +460,9 @@
     <div class="mt-4 flex flex-wrap items-center gap-4 text-sm text-theme-muted">
       <span>Durasi: {fmt(video?.duration)}</span>
       <span>&bull;</span>
-      <span>Ukuran: {video?.size_bytes ? (video.size_bytes / 1024 / 1024).toFixed(1) + ' MB' : '-'}</span>
+      <span>Ukuran: {video?.size_bytes ? (video.size_bytes / 1024 / 1024).toFixed(1) + " MB" : "-"}</span>
       <span>&bull;</span>
-      <span>Orientasi: {video?.is_portrait ? 'Portrait' : 'Landscape'}</span>
+      <span>Orientasi: {video?.is_portrait ? "Portrait" : "Landscape"}</span>
     </div>
   </div>
 </div>
