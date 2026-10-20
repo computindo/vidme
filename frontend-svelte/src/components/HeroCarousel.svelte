@@ -35,13 +35,25 @@
     }, 250);
   }
 
+  function handleMouseMove() {
+    const isTouch = typeof window !== "undefined" && (window.matchMedia("(hover: none)").matches || window.innerWidth < 1024);
+    if (isTouch) return;
+    if (previewVideoId === slides[currentIndex]?.id) return;
+    clearTimeout(hoverTimeout);
+    hoverTimeout = setTimeout(() => {
+      if (slides[currentIndex]) {
+        previewVideoId = slides[currentIndex].id;
+      }
+    }, 250);
+  }
+
   function handleMouseLeave() {
     clearTimeout(hoverTimeout);
     previewVideoId = null;
   }
 
   function handleSlideClick(slide) {
-    const isTouch = typeof window !== "undefined" && window.matchMedia("(hover: none)").matches;
+    const isTouch = typeof window !== "undefined" && (window.matchMedia("(hover: none)").matches || window.innerWidth < 1024);
     if (isTouch) {
       if (previewVideoId !== slide.id) {
         previewVideoId = slide.id;
@@ -87,6 +99,7 @@
     <div
       class="relative overflow-hidden rounded-2xl border border-theme-border bg-theme-surface shadow-2xl"
       onmouseenter={handleMouseEnter}
+      onmousemove={handleMouseMove}
       onmouseleave={handleMouseLeave}
     >
       <div class="relative aspect-video w-full overflow-hidden bg-black">

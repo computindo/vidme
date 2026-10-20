@@ -5,11 +5,21 @@
 
   let { video } = $props();
 
-  let isHovered = $state(false);
   let hoverTimer = null;
   let showVideoPreview = $state(false);
 
   function handleMouseEnter() {
+    clearTimeout(hoverTimer);
+    hoverTimer = setTimeout(() => {
+      if (video.has_microclip === 1) {
+        showVideoPreview = true;
+      }
+    }, 250);
+  }
+
+  function handleMouseMove() {
+    const isTouch = typeof window !== "undefined" && (window.matchMedia("(hover: none)").matches || window.innerWidth < 1024);
+    if (isTouch || showVideoPreview) return;
     clearTimeout(hoverTimer);
     hoverTimer = setTimeout(() => {
       if (video.has_microclip === 1) {
@@ -24,6 +34,13 @@
   }
 
   function handleCardClick() {
+    const isTouch = typeof window !== "undefined" && (window.matchMedia("(hover: none)").matches || window.innerWidth < 1024);
+    if (isTouch) {
+      if (!showVideoPreview && video.has_microclip === 1) {
+        showVideoPreview = true;
+        return;
+      }
+    }
     appState.navigate(`/v/${video.id}`);
   }
 </script>
@@ -31,6 +48,7 @@
 <article
   class="group relative flex flex-col overflow-hidden rounded-xl border border-theme-border bg-theme-surface transition-all duration-200 hover:-translate-y-1 hover:border-slate-700 hover:shadow-xl"
   onmouseenter={handleMouseEnter}
+  onmousemove={handleMouseMove}
   onmouseleave={handleMouseLeave}
 >
   <div
@@ -65,49 +83,49 @@
       </span>
     {/if}
 
-    {#if video.is_pinned === 1}
-      <span class="absolute right-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-white shadow">
+    <!-- Top Action Buttons on Thumbnail -->
+    <div
+      class="absolute right-2 top-2 z-20 flex items-center gap-1.5 transition-opacity duration-200 {video.is_pinned === 1 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}"
+    >
+      <button
+        onclick={(e) => {
+          e.stopPropagation();
+          pinVideo(video.id, video.is_pinned !== 1);
+        }}
+        class="flex h-7 w-7 items-center justify-center rounded-full backdrop-blur-md transition-all shadow-md {video.is_pinned === 1 ? 'bg-indigo-600 text-white' : 'bg-black/60 text-slate-300 hover:text-white hover:bg-black/80'}"
+        title={video.is_pinned === 1 ? "Batalkan Pin" : "Sematkan Video"}
+      >
         <span class="material-symbols text-sm">push_pin</span>
-      </span>
-    {/if}
+      </button>
+
+      <button
+        onclick={(e) => {
+          e.stopPropagation();
+          if (confirm(`Hapus video "${video.title}"?`)) {
+            deleteVideo(video.id);
+          }
+        }}
+        class="flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-slate-300 backdrop-blur-md transition-all hover:bg-red-600 hover:text-white shadow-md opacity-0 group-hover:opacity-100"
+        title="Hapus Video"
+      >
+        <span class="material-symbols text-sm">delete</span>
+      </button>
+    </div>
   </div>
 
   <div class="flex flex-1 flex-col justify-between p-3">
-    <div class="flex items-start justify-between gap-2">
-      <div class="flex-1 min-w-0">
-        <button
-          class="text-left cursor-pointer text-sm font-semibold text-slate-100 line-clamp-2 hover:text-indigo-400"
-          onclick={handleCardClick}
-        >
-          {video.title}
-        </button>
-        {#if video.created_at}
-          <p class="mt-1 text-xs text-slate-500">
-            {new Date(video.created_at).toLocaleDateString()}
-          </p>
-        {/if}
-      </div>
-
-      <div class="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-        <button
-          onclick={() => pinVideo(video.id, video.is_pinned !== 1)}
-          class="flex h-7 w-7 items-center justify-center rounded text-theme-muted hover:bg-theme-card hover:text-white"
-          title={video.is_pinned === 1 ? "Batalkan Pin" : "Sematkan Video"}
-        >
-          <span class="material-symbols text-base">push_pin</span>
-        </button>
-        <button
-          onclick={() => {
-            if (confirm(`Hapus video "${video.title}"?`)) {
-              deleteVideo(video.id);
-            }
-          }}
-          class="flex h-7 w-7 items-center justify-center rounded text-theme-muted hover:bg-red-500/10 hover:text-red-400"
-          title="Hapus Video"
-        >
-          <span class="material-symbols text-base">delete</span>
-        </button>
-      </div>
+    <div class="w-full min-w-0">
+      <button
+        class="text-left cursor-pointer text-sm font-semibold text-slate-100 line-clamp-2 hover:text-indigo-400 w-full break-words"
+        onclick={handleCardClick}
+      >
+        {video.title}
+      </button>
+      {#if video.created_at}
+        <p class="mt-1 text-xs text-slate-500">
+          {new Date(video.created_at).toLocaleDateString()}
+        </p>
+      {/if}
     </div>
 
     {#if video.status !== "ready"}

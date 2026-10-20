@@ -240,6 +240,9 @@
   $effect(() => {
     if (video) {
       editedTitle = video.title;
+      if (typeof document !== "undefined" && video.title) {
+        document.title = `${video.title} — VidMe`;
+      }
     }
   });
 
@@ -248,6 +251,9 @@
   });
 
   onDestroy(() => {
+    if (typeof document !== "undefined") {
+      document.title = "VidMe";
+    }
     window.removeEventListener("keydown", handleKeyDown);
     clearTimeout(holdTimer);
     clearTimeout(controlsTimeout);

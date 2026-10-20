@@ -21,7 +21,7 @@
 
 <aside
   id="sidebar"
-  class="fixed inset-y-0 left-0 z-40 w-[280px] border-r border-slate-800 bg-[#10182b] p-6 transition-transform duration-300 ease-in-out {appState.sidebarOpen ? 'translate-x-0' : '-translate-x-full'}"
+  class="fixed inset-y-0 left-0 z-40 flex h-screen w-[280px] flex-col overflow-hidden border-r border-slate-800 bg-[#10182b] p-6 transition-transform duration-300 ease-in-out {appState.sidebarOpen ? 'translate-x-0' : '-translate-x-full'}"
 >
   <div class="mb-8 flex items-center justify-between">
     <a
@@ -49,7 +49,7 @@
     <h2 class="text-xs font-semibold uppercase tracking-widest text-slate-500">Folders</h2>
   </div>
 
-  <nav id="folders" class="space-y-1 overflow-y-auto scrollbar" style="flex:1;min-height:0;max-height:calc(100vh-180px);">
+  <nav id="folders" class="flex-1 min-h-0 space-y-1 overflow-y-auto scrollbar pr-1">
     <button
       onclick={() => appState.navigate("/")}
       class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors {!appState.virtualView && !appState.activeFolderId ? "text-indigo-300 bg-slate-800" : "text-slate-400 hover:bg-slate-800"}"

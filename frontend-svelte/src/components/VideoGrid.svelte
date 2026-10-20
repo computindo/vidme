@@ -10,7 +10,7 @@
   const PAGE_SIZE = 20;
 
   const nonPinnedVideos = $derived(
-    appState.filteredVideos.filter((v) => isHomeLanding || v.is_pinned !== 1)
+    appState.filteredVideos.filter((v) => v.is_pinned !== 1)
   );
 
   const totalPages = $derived(Math.max(1, Math.ceil(nonPinnedVideos.length / PAGE_SIZE)));
