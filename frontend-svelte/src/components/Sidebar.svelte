@@ -21,7 +21,7 @@
 
 <aside
   id="sidebar"
-  class="fixed inset-y-0 left-0 z-40 w-[280px] border-r border-slate-800 bg-[#10182b] p-6 transition-transform duration-300 ease-in-out {appState.sidebarOpen ? translate-x-0 : -translate-x-full}"
+  class="fixed inset-y-0 left-0 z-40 w-[280px] border-r border-slate-800 bg-[#10182b] p-6 transition-transform duration-300 ease-in-out {appState.sidebarOpen ? 'translate-x-0' : '-translate-x-full'}"
 >
   <div class="mb-8 flex items-center justify-between">
     <a
