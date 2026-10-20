@@ -1,14 +1,21 @@
 class GlobalState {
   videos = $state([]);
   folders = $state([]);
-  currentRoute = $state('/');
+  currentRoute = $state("/");
   activeVideoId = $state(null);
   activeFolderId = $state(null);
-  virtualView = $state(null); // 'portrait', 'landscape', 'uncategorized'
-  searchQuery = $state('');
+  virtualView = $state(null); // "portrait", "landscape", "uncategorized"
+  searchQuery = $state("");
   page = $state(1);
   isPageMode = $state(false);
-  sidebarOpen = $state(true);
+  sidebarOpen = $state(
+    typeof window !== "undefined"
+      ? window.innerWidth >= 1024
+        ? localStorage.getItem("vidme_sidebar_collapsed") !== "1"
+        : false
+      : true
+  );
+  mobileSearchOpen = $state(false);
   uploadDrawerOpen = $state(false);
   activeUploads = $state([]);
   toasts = $state([]);
@@ -28,13 +35,13 @@ class GlobalState {
       return list.filter((v) => v.title && v.title.toLowerCase().includes(q));
     }
 
-    if (this.virtualView === 'portrait') {
+    if (this.virtualView === "portrait") {
       return list.filter((v) => v.is_portrait === 1);
     }
-    if (this.virtualView === 'landscape') {
+    if (this.virtualView === "landscape") {
       return list.filter((v) => v.is_portrait === 0);
     }
-    if (this.virtualView === 'uncategorized') {
+    if (this.virtualView === "uncategorized") {
       return list.filter((v) => !v.folder_id);
     }
 
@@ -56,13 +63,24 @@ class GlobalState {
   recentVideos = $derived(
     !this.activeFolderId && !this.virtualView && !this.searchQuery
       ? [...this.videos]
-          .filter((v) => v.status === 'ready')
+          .filter((v) => v.status === "ready")
           .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
           .slice(0, 10)
       : []
   );
 
-  addToast(message, type = 'info', duration = 3000) {
+  toggleSidebar() {
+    this.sidebarOpen = !this.sidebarOpen;
+    if (typeof window !== "undefined" && window.innerWidth >= 1024) {
+      localStorage.setItem("vidme_sidebar_collapsed", this.sidebarOpen ? "0" : "1");
+    }
+  }
+
+  toggleMobileSearch() {
+    this.mobileSearchOpen = !this.mobileSearchOpen;
+  }
+
+  addToast(message, type = "info", duration = 3000) {
     const id = Math.random().toString(36).slice(2);
     this.toasts.push({ id, message, type });
     setTimeout(() => {
@@ -71,11 +89,11 @@ class GlobalState {
   }
 
   navigate(path) {
-    if (!this.activeVideoId && path.includes('/v/')) {
-      sessionStorage.setItem('vidme-scroll-pos', String(window.scrollY));
+    if (!this.activeVideoId && path.includes("/v/")) {
+      sessionStorage.setItem("vidme-scroll-pos", String(window.scrollY));
     }
     if (window.location.pathname + window.location.search !== path) {
-      window.history.pushState(null, '', path);
+      window.history.pushState(null, "", path);
     }
     this.parseCurrentUrl();
   }
@@ -83,27 +101,27 @@ class GlobalState {
   parseCurrentUrl() {
     const path = window.location.pathname;
     const searchParams = new URLSearchParams(window.location.search);
-    this.isPageMode = searchParams.has('page');
-    const pageParam = parseInt(searchParams.get('page') || '1', 10);
+    this.isPageMode = searchParams.has("page");
+    const pageParam = parseInt(searchParams.get("page") || "1", 10);
     this.page = pageParam > 0 ? pageParam : 1;
 
     // Check player URL: /v/:id or /:slug/v/:id or /library/:view/v/:id
     const vMatch = path.match(/(?:\/.*)?\/v\/([^/]+)/);
     if (vMatch) {
       if (!this.activeVideoId) {
-        sessionStorage.setItem('vidme-scroll-pos', String(window.scrollY));
+        sessionStorage.setItem("vidme-scroll-pos", String(window.scrollY));
       }
       this.activeVideoId = vMatch[1];
-      this.currentRoute = 'player';
+      this.currentRoute = "player";
       return;
     }
 
-    const wasPlayer = this.currentRoute === 'player';
+    const wasPlayer = this.currentRoute === "player";
     this.activeVideoId = null;
-    this.currentRoute = 'grid';
+    this.currentRoute = "grid";
 
     if (wasPlayer) {
-      const saved = sessionStorage.getItem('vidme-scroll-pos');
+      const saved = sessionStorage.getItem("vidme-scroll-pos");
       if (saved) {
         requestAnimationFrame(() => {
           window.scrollTo(0, parseInt(saved, 10));
@@ -121,9 +139,9 @@ class GlobalState {
     this.virtualView = null;
 
     // Check folder by slug
-    const folderSlug = path.replace(/^\/|\/$/g, '');
-    if (folderSlug && folderSlug !== 'index.html' && folderSlug !== 'player.html') {
-      const found = this.folders.find((f) => f.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') === folderSlug);
+    const folderSlug = path.replace(/^\/|\/$/g, "");
+    if (folderSlug && folderSlug !== "index.html" && folderSlug !== "player.html") {
+      const found = this.folders.find((f) => f.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") === folderSlug);
       if (found) {
         this.activeFolderId = found.id;
         return;

@@ -1,21 +1,54 @@
 <script>
-  import { appState } from '../lib/state.svelte.js';
+  import { appState } from "../lib/state.svelte.js";
 
   let currentIndex = $state(0);
   const slides = $derived(appState.recentVideos);
+  let previewVideoId = $state(null);
+  let hoverTimeout = null;
 
   function nextSlide() {
     if (slides.length === 0) return;
+    clearTimeout(hoverTimeout);
+    previewVideoId = null;
     currentIndex = (currentIndex + 1) % slides.length;
   }
 
   function prevSlide() {
     if (slides.length === 0) return;
+    clearTimeout(hoverTimeout);
+    previewVideoId = null;
     currentIndex = (currentIndex - 1 + slides.length) % slides.length;
   }
 
   function goToSlide(idx) {
+    clearTimeout(hoverTimeout);
+    previewVideoId = null;
     currentIndex = idx;
+  }
+
+  function handleMouseEnter() {
+    clearTimeout(hoverTimeout);
+    hoverTimeout = setTimeout(() => {
+      if (slides[currentIndex]) {
+        previewVideoId = slides[currentIndex].id;
+      }
+    }, 250);
+  }
+
+  function handleMouseLeave() {
+    clearTimeout(hoverTimeout);
+    previewVideoId = null;
+  }
+
+  function handleSlideClick(slide) {
+    const isTouch = typeof window !== "undefined" && window.matchMedia("(hover: none)").matches;
+    if (isTouch) {
+      if (previewVideoId !== slide.id) {
+        previewVideoId = slide.id;
+        return;
+      }
+    }
+    appState.navigate(`/v/${slide.id}`);
   }
 
   let touchStartX = 0;
@@ -51,35 +84,58 @@
     ontouchstart={handleTouchStart}
     ontouchend={handleTouchEnd}
   >
-    <div class="relative overflow-hidden rounded-2xl border border-theme-border bg-theme-surface shadow-2xl">
+    <div
+      class="relative overflow-hidden rounded-2xl border border-theme-border bg-theme-surface shadow-2xl"
+      onmouseenter={handleMouseEnter}
+      onmouseleave={handleMouseLeave}
+    >
       <div class="relative aspect-video w-full overflow-hidden bg-black">
         {#each slides as slide, idx (slide.id)}
           <div
             class="absolute inset-0 transition-opacity duration-500 ease-in-out {idx === currentIndex ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}"
           >
-            <img
-              src={`/storyboard/${slide.id}`}
-              alt={slide.title}
-              class="h-full w-full object-contain"
-              onerror={(e) => (e.target.src = `/thumb/${slide.id}`)}
-            />
+            {#if previewVideoId === slide.id}
+              <video
+                src={`/clip/${slide.id}`}
+                autoplay
+                loop
+                muted
+                playsinline
+                class="absolute inset-0 h-full w-full object-contain bg-black z-0"
+              ></video>
+            {:else}
+              <img
+                src={`/storyboard/${slide.id}`}
+                alt={slide.title}
+                class="h-full w-full object-contain"
+                onerror={(e) => (e.target.src = `/thumb/${slide.id}`)}
+              />
+            {/if}
 
             <div
               role="button"
               tabindex="0"
-              class="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/90 via-black/30 to-transparent p-6 text-white cursor-pointer"
-              onclick={() => appState.navigate(`/v/${slide.id}`)}
-              onkeydown={(e) => e.key === 'Enter' && appState.navigate(`/v/${slide.id}`)}
+              class="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/90 via-black/30 to-transparent p-6 text-white cursor-pointer z-10"
+              onclick={() => handleSlideClick(slide)}
+              onkeydown={(e) => e.key === "Enter" && handleSlideClick(slide)}
             >
-              <span class="inline-flex items-center gap-1.5 self-start rounded-full bg-indigo-600/90 px-3 py-1 text-xs font-semibold uppercase tracking-wider backdrop-blur-md">
-                <span class="material-symbols text-sm">auto_awesome</span>
-                Terbaru
-              </span>
+              <div class="flex items-center gap-2">
+                <span class="inline-flex items-center gap-1.5 self-start rounded-full bg-indigo-600/90 px-3 py-1 text-xs font-semibold uppercase tracking-wider backdrop-blur-md">
+                  <span class="material-symbols text-sm">auto_awesome</span>
+                  Terbaru
+                </span>
+                {#if previewVideoId === slide.id}
+                  <span class="inline-flex items-center gap-1 self-start rounded-full bg-emerald-500/90 px-2.5 py-1 text-xs font-semibold tracking-wider text-white backdrop-blur-md animate-pulse">
+                    <span class="material-symbols text-xs">play_arrow</span>
+                    Preview
+                  </span>
+                {/if}
+              </div>
               <h2 class="mt-2 text-xl font-bold tracking-tight text-white line-clamp-2 md:text-3xl">
                 {slide.title}
               </h2>
               <p class="mt-1 text-xs text-slate-300 md:text-sm">
-                Diproses &bull; {slide.is_portrait ? 'Portrait' : 'Landscape'}
+                Diproses &bull; {slide.is_portrait ? "Portrait" : "Landscape"}
               </p>
             </div>
           </div>

@@ -1,8 +1,7 @@
 <script>
-  import { appState } from '../lib/state.svelte.js';
+  import { appState } from "../lib/state.svelte.js";
 
   let localSearch = $state(appState.searchQuery);
-  let mobileSearchOpen = $state(false);
   let debounceTimer = null;
 
   function handleSearchInput(e) {
@@ -14,26 +13,31 @@
   }
 
   function clearSearch() {
-    localSearch = '';
-    appState.searchQuery = '';
+    localSearch = "";
+    appState.searchQuery = "";
   }
 </script>
 
 <header class="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-theme-border bg-theme-surface/90 px-4 backdrop-blur-md">
   <div class="flex items-center gap-3">
-    <button
-      class="flex h-10 w-10 items-center justify-center rounded-lg text-theme-muted hover:bg-theme-card hover:text-white"
-      onclick={() => (appState.sidebarOpen = !appState.sidebarOpen)}
-      aria-label="Toggle Sidebar"
-    >
-      <span class="material-symbols">menu</span>
-    </button>
+    <!-- Sidebar Reveal Button: visible when sidebar is closed -->
+    {#if !appState.sidebarOpen}
+      <button
+        id="sidebarRevealBtn"
+        onclick={() => appState.toggleSidebar()}
+        title="Open sidebar"
+        class="flex h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-[#10182b] px-2.5 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
+      >
+        <span class="material-symbols text-xl">left_panel_open</span>
+      </button>
+    {/if}
+
     <a
       href="/"
       class="flex items-center gap-2 text-xl font-bold tracking-tight text-white"
       onclick={(e) => {
         e.preventDefault();
-        appState.navigate('/');
+        appState.navigate("/");
       }}
     >
       <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-white shadow-lg shadow-indigo-500/30">
@@ -67,10 +71,10 @@
   <div class="flex items-center gap-2">
     <button
       class="flex h-10 w-10 items-center justify-center rounded-lg text-theme-muted hover:bg-theme-card hover:text-white md:hidden"
-      onclick={() => (mobileSearchOpen = !mobileSearchOpen)}
+      onclick={() => appState.toggleMobileSearch()}
       aria-label="Toggle Search"
     >
-      <span class="material-symbols">{mobileSearchOpen ? 'close' : 'search'}</span>
+      <span class="material-symbols">{appState.mobileSearchOpen ? "close" : "search"}</span>
     </button>
     <button
       onclick={() => (appState.uploadDrawerOpen = !appState.uploadDrawerOpen)}
@@ -82,7 +86,7 @@
   </div>
 </header>
 
-{#if mobileSearchOpen}
+{#if appState.mobileSearchOpen}
   <div class="sticky top-16 z-20 flex w-full items-center border-b border-theme-border bg-theme-surface/95 px-4 py-2.5 backdrop-blur-md md:hidden">
     <div class="relative flex w-full items-center">
       <span class="material-symbols absolute left-3 text-theme-muted">search</span>

@@ -1,6 +1,6 @@
 <script>
-  import { appState } from '../lib/state.svelte.js';
-  import { slugify } from '../lib/utils.js';
+  import { appState } from "../lib/state.svelte.js";
+  import { slugify } from "../lib/utils.js";
 
   function countVideosByFolder(folderId) {
     return appState.videos.filter((v) => v.folder_id === folderId).length;
@@ -11,82 +11,99 @@
   const uncategorizedCount = $derived(appState.videos.filter((v) => !v.folder_id).length);
 </script>
 
+{#if appState.sidebarOpen}
+  <div
+    role="presentation"
+    onclick={() => appState.toggleSidebar()}
+    class="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm lg:hidden cursor-pointer"
+  ></div>
+{/if}
+
 <aside
-  class="fixed left-0 top-16 z-20 h-[calc(100vh-4rem)] w-64 border-r border-theme-border bg-theme-surface/95 transition-transform duration-300 md:translate-x-0 {appState.sidebarOpen ? 'translate-x-0' : '-translate-x-full'}"
+  id="sidebar"
+  class="fixed inset-y-0 left-0 z-40 w-[280px] border-r border-slate-800 bg-[#10182b] p-6 transition-transform duration-300 ease-in-out {appState.sidebarOpen ? translate-x-0 : -translate-x-full}"
 >
-  <div class="flex h-full flex-col justify-between overflow-y-auto p-4">
-    <div class="space-y-6">
-      <div class="space-y-1">
-        <button
-          onclick={() => appState.navigate('/')}
-          class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors {!appState.virtualView && !appState.activeFolderId ? 'bg-indigo-600/10 text-indigo-400' : 'text-slate-300 hover:bg-theme-card hover:text-white'}"
-        >
-          <span class="material-symbols text-xl">home</span>
-          <span>Semua Video</span>
-        </button>
-      </div>
-
-      <div>
-        <h3 class="px-3 text-xs font-semibold uppercase tracking-wider text-theme-muted">Perpustakaan</h3>
-        <div class="mt-2 space-y-1">
-          <button
-            onclick={() => appState.navigate('/library/portrait')}
-            class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors {appState.virtualView === 'portrait' ? 'bg-indigo-600/10 text-indigo-400' : 'text-slate-300 hover:bg-theme-card hover:text-white'}"
-          >
-            <div class="flex items-center gap-3">
-              <span class="material-symbols text-xl">stay_current_portrait</span>
-              <span>Portrait</span>
-            </div>
-            <span class="text-xs text-theme-muted">{portraitCount}</span>
-          </button>
-
-          <button
-            onclick={() => appState.navigate('/library/landscape')}
-            class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors {appState.virtualView === 'landscape' ? 'bg-indigo-600/10 text-indigo-400' : 'text-slate-300 hover:bg-theme-card hover:text-white'}"
-          >
-            <div class="flex items-center gap-3">
-              <span class="material-symbols text-xl">stay_current_landscape</span>
-              <span>Landscape</span>
-            </div>
-            <span class="text-xs text-theme-muted">{landscapeCount}</span>
-          </button>
-
-          <button
-            onclick={() => appState.navigate('/library/uncategorized')}
-            class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors {appState.virtualView === 'uncategorized' ? 'bg-indigo-600/10 text-indigo-400' : 'text-slate-300 hover:bg-theme-card hover:text-white'}"
-          >
-            <div class="flex items-center gap-3">
-              <span class="material-symbols text-xl">folder_open</span>
-              <span>Tanpa Kategori</span>
-            </div>
-            <span class="text-xs text-theme-muted">{uncategorizedCount}</span>
-          </button>
-        </div>
-      </div>
-
-      {#if appState.folders.length > 0}
-        <div>
-          <h3 class="px-3 text-xs font-semibold uppercase tracking-wider text-theme-muted">Folder</h3>
-          <div class="mt-2 space-y-1">
-            {#each appState.folders as folder (folder.id)}
-              <button
-                onclick={() => appState.navigate(`/${slugify(folder.name)}`)}
-                class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors {appState.activeFolderId === folder.id ? 'bg-indigo-600/10 text-indigo-400' : 'text-slate-300 hover:bg-theme-card hover:text-white'}"
-              >
-                <div class="flex items-center gap-3 truncate">
-                  <span class="material-symbols text-xl text-amber-400">folder</span>
-                  <span class="truncate">{folder.name}</span>
-                </div>
-                <span class="text-xs text-theme-muted">{countVideosByFolder(folder.id)}</span>
-              </button>
-            {/each}
-          </div>
-        </div>
-      {/if}
-    </div>
-
-    <div class="border-t border-theme-border pt-4 text-xs text-theme-muted">
-      VidMe v2.0 &bull; Svelte 5 + Rust
-    </div>
+  <div class="mb-8 flex items-center justify-between">
+    <a
+      href="/"
+      onclick={(e) => {
+        e.preventDefault();
+        appState.navigate("/");
+      }}
+      class="flex items-center gap-3 text-2xl font-bold tracking-tight text-white font-heading"
+    >
+      <span class="material-symbols text-2xl text-indigo-400">play_circle</span>
+      <span>VidMe</span>
+    </a>
+    <button
+      id="sidebarToggleBtn"
+      onclick={() => appState.toggleSidebar()}
+      title="Collapse sidebar"
+      class="flex h-8 w-8 items-center justify-center rounded-lg bg-transparent text-slate-500 hover:text-white transition-colors cursor-pointer"
+    >
+      <span class="material-symbols text-xl">left_panel_close</span>
+    </button>
   </div>
+
+  <div class="mb-4 flex items-center justify-between">
+    <h2 class="text-xs font-semibold uppercase tracking-widest text-slate-500">Folders</h2>
+  </div>
+
+  <nav id="folders" class="space-y-1 overflow-y-auto scrollbar" style="flex:1;min-height:0;max-height:calc(100vh-180px);">
+    <button
+      onclick={() => appState.navigate("/")}
+      class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors {!appState.virtualView && !appState.activeFolderId ? "text-indigo-300 bg-slate-800" : "text-slate-400 hover:bg-slate-800"}"
+    >
+      <span class="material-symbols text-xl">video_library</span>
+      <span>All videos</span>
+    </button>
+
+    <button
+      onclick={() => appState.navigate("/library/uncategorized")}
+      class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors {appState.virtualView === 'uncategorized' ? 'text-indigo-300 bg-slate-800' : 'text-slate-400 hover:bg-slate-800'}"
+    >
+      <div class="flex items-center gap-3">
+        <span class="material-symbols text-xl">folder_off</span>
+        <span>Uncategorized</span>
+      </div>
+      <span class="text-xs text-slate-500">{uncategorizedCount}</span>
+    </button>
+
+    <button
+      onclick={() => appState.navigate("/library/portrait")}
+      class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors {appState.virtualView === 'portrait' ? 'text-indigo-300 bg-slate-800' : 'text-slate-400 hover:bg-slate-800'}"
+    >
+      <div class="flex items-center gap-3">
+        <span class="material-symbols text-xl">stay_current_portrait</span>
+        <span>Portrait</span>
+      </div>
+      <span class="text-xs text-slate-500">{portraitCount}</span>
+    </button>
+
+    <button
+      onclick={() => appState.navigate("/library/landscape")}
+      class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors {appState.virtualView === 'landscape' ? 'text-indigo-300 bg-slate-800' : 'text-slate-400 hover:bg-slate-800'}"
+    >
+      <div class="flex items-center gap-3">
+        <span class="material-symbols text-xl">stay_current_landscape</span>
+        <span>Landscape</span>
+      </div>
+      <span class="text-xs text-slate-500">{landscapeCount}</span>
+    </button>
+
+    {#if appState.folders.length > 0}
+      {#each appState.folders as folder (folder.id)}
+        <div class="flex items-center rounded-lg hover:bg-slate-800">
+          <button
+            onclick={() => appState.navigate(`/${slugify(folder.name)}`)}
+            class="flex flex-1 items-center gap-3 py-2 px-3 text-left text-sm font-medium transition-colors truncate {appState.activeFolderId === folder.id ? "text-indigo-300" : "text-slate-400"}"
+          >
+            <span class="material-symbols text-xl text-slate-400">folder</span>
+            <span class="truncate">{folder.name}</span>
+            <span class="ml-auto text-xs text-slate-500">{countVideosByFolder(folder.id)}</span>
+          </button>
+        </div>
+      {/each}
+    {/if}
+  </nav>
 </aside>

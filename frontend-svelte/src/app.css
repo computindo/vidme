@@ -50,3 +50,43 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #33374d;
 }
+
+/* Explore More Button — Uiverse.io by vinodjangid07 */
+.explore-btn {
+  width: 110px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  background-color: rgb(56, 189, 248);
+  border-radius: 30px;
+  color: rgb(19, 19, 19);
+  font-weight: 600;
+  border: none;
+  position: relative;
+  cursor: pointer;
+  box-shadow: 5px 5px 10px rgba(0, 0, 0, 0.116);
+  padding-left: 8px;
+  transition-duration: .5s;
+}
+
+.explore-btn .svgIcon {
+  height: 25px;
+  transition-duration: 1.5s;
+}
+
+.explore-btn:hover {
+  background-color: rgb(125, 211, 252);
+  transition-duration: .5s;
+}
+
+.explore-btn:active {
+  transform: scale(0.97);
+  transition-duration: .2s;
+}
+
+.explore-btn:hover .svgIcon {
+  transform: rotate(250deg);
+  transition-duration: 1.5s;
+}

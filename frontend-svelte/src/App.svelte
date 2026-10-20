@@ -37,7 +37,7 @@
     <Sidebar />
 
     <main
-      class="flex-1 transition-all duration-300 pb-20 md:pb-8 {appState.sidebarOpen ? 'md:ml-64' : 'ml-0'}"
+      class="flex-1 transition-all duration-300 pb-20 lg:pb-8 {appState.sidebarOpen ? 'lg:ml-[280px]' : 'ml-0'}"
     >
       {#if appState.isLoading && appState.videos.length === 0}
         <div class="flex h-[calc(100vh-4rem)] items-center justify-center">
