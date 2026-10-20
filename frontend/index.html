@@ -1291,12 +1291,9 @@ function render() {
   const landscape = (pageMode || _isHomeLanding) ? [] : vs.filter(v => !v.is_pinned && !v.is_portrait);
   let html = '';
   if (pinned.length) {
-    const mixed_p = pinned.filter(v => v.is_portrait);
-    const mixed_l = pinned.filter(v => !v.is_portrait);
     html += `<section>
       <h3 class="mb-3 font-heading text-lg flex items-center gap-2"><span class="material-symbols-outlined text-indigo-300" style="font-size:18px">push_pin</span>Pinned</h3>
-      <div class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">${mixed_p.map(card).join('')}</div>
-      ${mixed_l.length ? `<div class="mt-4 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">${mixed_l.map(card).join('')}</div>` : ''}
+      <div class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">${pinned.map(card).join('')}</div>
     </section>`;
   }
   // Recent Uploads: HANYA di main view (All videos) TANPA query aktif — hidden di folder/virtual/search.
