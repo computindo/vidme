@@ -32,7 +32,7 @@
       if (slides[currentIndex]) {
         previewVideoId = slides[currentIndex].id;
       }
-    }, 250);
+    }, 100);
   }
 
   function handleMouseMove() {
@@ -44,7 +44,7 @@
       if (slides[currentIndex]) {
         previewVideoId = slides[currentIndex].id;
       }
-    }, 250);
+    }, 100);
   }
 
   function handleMouseLeave() {

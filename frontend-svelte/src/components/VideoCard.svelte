@@ -14,7 +14,7 @@
       if (video.has_microclip === 1) {
         showVideoPreview = true;
       }
-    }, 250);
+    }, 100);
   }
 
   function handleMouseMove() {
@@ -25,7 +25,7 @@
       if (video.has_microclip === 1) {
         showVideoPreview = true;
       }
-    }, 250);
+    }, 100);
   }
 
   function handleMouseLeave() {
