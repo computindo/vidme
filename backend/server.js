@@ -225,6 +225,7 @@ app.use('/webdav', webdavAuth, (req, res, next) => {
       }
     }
     const dest = path.join(destDir, filename);
+    const tempDest = path.join(destDir, '.' + filename + '.uploading');
     const ext = path.extname(filename).toLowerCase();
     if (!VIDEO_EXTS.includes(ext)) {
       logger.warn('WebDAV', `Rejected non-video file: ${filename}`);
@@ -232,14 +233,13 @@ app.use('/webdav', webdavAuth, (req, res, next) => {
       return res.status(415).end();
     }
     logger.info('WebDAV', `File received: ${filename} (${req.headers['content-length'] ?? '?'} bytes)${subfolderName ? ' → folder: ' + subfolderName : ''}`);
-    const ws = fs.createWriteStream(dest);
+    const ws = fs.createWriteStream(tempDest);
     req.pipe(ws);
     ws.on('finish', () => {
       // vidme-codecgate: probe sebelum accept — non-H.264 = rm + 422 (22-09-26)
-      probe(dest, metadata => {
+      probe(tempDest, metadata => {
         if (metadata && !codecAllowed(metadata.codec)) {
-          try { fs.rmSync(dest, { force: true }); } catch (e) {}
-          try { fs.rmSync(dest + '.folderid', { force: true }); } catch (e) {}
+          try { fs.rmSync(tempDest, { force: true }); } catch (e) {}
           logger.warn('WebDAV', 'Rejected (codec ' + metadata.codec + '): ' + filename);
           return res.status(422).end();
         }
@@ -247,11 +247,19 @@ app.use('/webdav', webdavAuth, (req, res, next) => {
         if (inboxFolder_id) {
           fs.writeFileSync(dest + '.folderid', inboxFolder_id, 'utf8');
         }
-        res.status(201).end();
+        try {
+          fs.renameSync(tempDest, dest);
+          res.status(201).end();
+        } catch (renameErr) {
+          logger.error('WebDAV', `Rename failed: ${filename} — ${renameErr.message}`);
+          try { fs.rmSync(tempDest, { force: true }); } catch (e) {}
+          try { fs.rmSync(dest + '.folderid', { force: true }); } catch (e) {}
+          res.status(500).end();
+        }
       });
     });
     ws.on('error', () => {
-      try { fs.rmSync(dest, { force: true }); } catch (e) {}
+      try { fs.rmSync(tempDest, { force: true }); } catch (e) {}
       res.status(500).end();
     });
     return;
@@ -388,6 +396,7 @@ function safePath(dir, name) {
   const resolved = path.resolve(dir, name);
   return resolved.startsWith(`${path.resolve(dir)}${path.sep}`) ? resolved : null;
 }
+
 function probe(file, callback) {
   execFile('ffprobe', ['-v', 'error', '-show_entries', 'format=duration:stream=codec_name,width,height,r_frame_rate,avg_frame_rate,side_data_list:stream_side_data=rotation', '-of', 'json', file], (error, stdout) => {
     if (error) return callback(null);
@@ -423,6 +432,7 @@ function probe(file, callback) {
     } catch { callback(null); }
   });
 }
+
 function transcode(video, inputOverride) {
   const stagingInput = inputOverride || path.join(STAGING, `${video.id}.mp4`);
   const originalInput = path.join(ORIGINAL, video.filename || `${video.id}.mp4`);
@@ -486,17 +496,17 @@ function generateStoryboard(video) {
       const dur = actualDur && actualDur > 0 ? actualDur : Number(video.duration || 0);
       if (dur <= 0) { logger.error('Storyboard', `Failed: ${video.id} — unknown duration`); return resolve(false); }
       const ratios = [0, 0.25, 0.5, 0.75]; // frame pertama + 25/50/75% (grid 2x2, tile = ukuran frame thumb)
+      const positions = ratios.map(r => +(dur * r).toFixed(2));
       const vf = vfFor(video);
-      // Time-window select (0.5s window per tile) instead of exact frame-number match — tolerates
-      // corrupt frames / missing PTS without dropping the entire composite to 0 frames.
-      const sel = ratios.map((r, i) => {
-        const t = dur * r;
-        const t0 = Math.max(0, t - 0.25).toFixed(2);
-        const t1 = (t + 0.25).toFixed(2);
-        return `[s${i}]select='gte(t\,${t0})*lt(t\,${t1})',${vf},format=yuvj420p[f${i}]`;
-      }).join(';');
-      const fc = `[0:v]split=4[s0][s1][s2][s3];${sel};[f0][f1][f2][f3]xstack=inputs=4:layout=0_0|w0_0|0_h0|w0_h0[xs];[xs]format=yuvj420p[v]`;
-      const args = ['-y', '-err_detect', 'ignore_err', '-fflags', '+discardcorrupt', '-i', src, '-filter_complex', fc, '-map', '[v]', '-frames:v', '1', '-update', '1', '-q:v', '5', out];
+      // Multi-input fast-seeking (-ss <pos> -i <src> 4x) — anti-desync buffer starvation on long videos (>10m),
+      // finishing in seconds instead of minutes of sequential decode.
+      const args = ['-y', '-err_detect', 'ignore_err', '-fflags', '+discardcorrupt'];
+      for (const p of positions) {
+        args.push('-ss', String(p), '-i', src);
+      }
+      const fc = positions.map((_, i) => `[${i}:v]${vf},format=yuvj420p[f${i}]`).join(';')
+        + `;[f0][f1][f2][f3]xstack=inputs=4:layout=0_0|w0_0|0_h0|w0_h0[xs];[xs]format=yuvj420p[v]`;
+      args.push('-filter_complex', fc, '-map', '[v]', '-frames:v', '1', '-update', '1', '-q:v', '5', out);
       execFile('ffmpeg', args, { maxBuffer: 8 * 1024 * 1024 }, error => {
         if (error) { logger.error('Storyboard', `Failed: ${video.id} — ${error.message}`); return resolve(false); }
         let size = 0;
