@@ -997,6 +997,27 @@ function clearUploadHistory() {
   state.uploads = state.uploads.filter(u => u.status === 'uploading');
   renderUploadCenter();
 }
+// vidme-bugfix-1021: reconcile uploads against server state
+// Kalau ada item upload yg masih 'uploading'/'queued' di client tapi video-nya
+// sudah ready di server (by title match), otomatis tandai done & hapus dari IDB.
+function reconcileUploads() {
+  if (!state.uploads.length || !state.videos.length) return;
+  let changed = false;
+  state.uploads.forEach(u => {
+    if (u.status !== 'uploading' && u.status !== 'queued') return;
+    const match = state.videos.find(v =>
+      v.status === 'ready' &&
+      v.title && u.title &&
+      v.title.toLowerCase() === u.title.toLowerCase()
+    );
+    if (match) {
+      u.status = 'done'; u.progress = 100; u.timestamp = Date.now();
+      idbDel(u.id).catch(() => {});
+      changed = true;
+    }
+  });
+  if (changed) { updateUploadBadge(); renderUploadCenter(); }
+}
 
 // ── Select mode ──
 function setSelectMode(on) {
@@ -1466,6 +1487,7 @@ function parseUrlFolder() {
 async function load() {
   const [videos, folderTree] = await Promise.all([api('/api/videos'), api('/api/folders')]);
   state.videos = videos;
+  reconcileUploads(); // vidme-bugfix-1021
   state.folderTree = folderTree;
   state.folders = flattenFolders(folderTree);
   // Restore folder from URL
@@ -2368,7 +2390,7 @@ if ('serviceWorker' in navigator) {
               if (els.length) els.forEach(el => { el.outerHTML = card(v); });
               else if (_onPageRenderable(d.id)) render();
             }
-            if (d.status === 'ready') toast(`✓ <b>${esc(d.title||'video')}</b> ready`, 'success');
+            if (d.status === 'ready') { toast(`✓ <b>${esc(d.title||'video')}</b> ready`, 'success'); reconcileUploads(); } // vidme-bugfix-1021
           }
         } else if (d.status === 'ready') {
           // video baru muncul (upload dari device lain) — refresh penuh sekali
