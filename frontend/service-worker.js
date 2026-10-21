@@ -5,7 +5,7 @@
 // VidMe Service Worker v5 — native fetch TUS client.
 // No tus-js-client: its browser stack is XHR-only, and SW has no XMLHttpRequest.
 // TUS flow: POST create -> Location; PATCH chunks w/ Upload-Offset; HEAD for resume; DELETE to cancel.
-const CACHE = "vidme-v2.9.3";
+const CACHE = "vidme-v2.9.4";
 const STATIC = ['/', '/index.html', '/player.html'];
 const DB_NAME = 'vidme-uploads';
 const DB_STORE = 'uploads';

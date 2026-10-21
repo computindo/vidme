@@ -7,6 +7,174 @@ const multer = require('multer');
 const archiver = require('archiver');
 const logger = require('./logger');
 const db = require('./db/sqlite');
+
+// ── VidMe Suggestions Engine: Round-Robin Shuffled Deck (Zero-Lock JSON) ──
+class SuggestionsManager {
+  constructor(storagePath) {
+    this.filePath = path.join(storagePath, 'suggestions.json');
+    this.cache = null;
+  }
+
+  load() {
+    try {
+      if (fs.existsSync(this.filePath)) {
+        return JSON.parse(fs.readFileSync(this.filePath, 'utf8'));
+      }
+    } catch (e) {
+      logger.error('Suggestions', 'Load failed: ' + e.message);
+    }
+    return null;
+  }
+
+  save(data) {
+    try {
+      const tmp = this.filePath + '.tmp';
+      fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf8');
+      fs.renameSync(tmp, this.filePath);
+      this.cache = data;
+    } catch (e) {
+      logger.error('Suggestions', 'Save failed: ' + e.message);
+    }
+  }
+
+  shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  getReadyVideoIds() {
+    try {
+      return db.prepare("SELECT id FROM videos WHERE status = 'ready' AND is_pinned = 0 ORDER BY rowid ASC").all().map(r => r.id);
+    } catch (e) {
+      return [];
+    }
+  }
+
+  getVideoById(id) {
+    try {
+      return db.prepare("SELECT * FROM videos WHERE id = ? AND status = 'ready'").get(id);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  resetCycle(existingState) {
+    const allIds = this.getReadyVideoIds();
+    const shuffled = this.shuffle(allIds);
+    const current = shuffled.slice(0, 12);
+    const deck = shuffled.slice(12);
+    const now = Date.now();
+    const cycle = (existingState ? (existingState.cycle || 0) : 0) + 1;
+    const newState = {
+      cycle,
+      turn_index: 1,
+      last_rotation_ts: now,
+      next_rotation_ts: now + (6 * 3600 * 1000),
+      current_ids: current,
+      deck: deck,
+      used_ids: []
+    };
+    this.save(newState);
+    logger.info('Suggestions', `Cycle ${cycle} started with ${allIds.length} videos (12 current, ${deck.length} remaining in deck)`);
+    return newState;
+  }
+
+  getSuggestions() {
+    let state = this.cache || this.load();
+    const now = Date.now();
+
+    if (!state || !Array.isArray(state.current_ids) || !Array.isArray(state.deck)) {
+      state = this.resetCycle(null);
+    } else if (now >= state.next_rotation_ts) {
+      const used = (state.used_ids || []).concat(state.current_ids || []);
+      let deck = state.deck || [];
+
+      if (deck.length >= 12) {
+        state.turn_index = (state.turn_index || 1) + 1;
+        state.current_ids = deck.slice(0, 12);
+        state.deck = deck.slice(12);
+        state.used_ids = used;
+        state.last_rotation_ts = now;
+        state.next_rotation_ts = now + (6 * 3600 * 1000);
+        this.save(state);
+        logger.info('Suggestions', `Turn rotated: index ${state.turn_index}, ${deck.length - 12} left in deck`);
+      } else if (deck.length > 0) {
+        const remaining = deck.slice();
+        const needed = 12 - remaining.length;
+        const allIds = this.getReadyVideoIds().filter(id => !remaining.includes(id));
+        const shuffled = this.shuffle(allIds);
+        state.cycle = (state.cycle || 1) + 1;
+        state.turn_index = 1;
+        state.current_ids = remaining.concat(shuffled.slice(0, needed));
+        state.deck = shuffled.slice(needed);
+        state.used_ids = [];
+        state.last_rotation_ts = now;
+        state.next_rotation_ts = now + (6 * 3600 * 1000);
+        this.save(state);
+        logger.info('Suggestions', `Cycle reset to ${state.cycle} (carried ${remaining.length} from previous deck)`);
+      } else {
+        state = this.resetCycle(state);
+      }
+    }
+
+    const list = (state.current_ids || [])
+      .map(id => this.getVideoById(id))
+      .filter(Boolean);
+    return list;
+  }
+
+  onVideoAdded(id) {
+    let state = this.cache || this.load();
+    if (!state) return;
+    const allKnown = new Set([
+      ...(state.current_ids || []),
+      ...(state.deck || []),
+      ...(state.used_ids || [])
+    ]);
+    if (allKnown.has(id)) return;
+
+    // Insert randomly into the remaining deck
+    const deck = (state.deck || []).slice();
+    const pos = Math.floor(Math.random() * (deck.length + 1));
+    deck.splice(pos, 0, id);
+    state.deck = deck;
+    this.save(state);
+    logger.info('Suggestions', `New video ${id} queued into deck at position ${pos}/${deck.length}`);
+  }
+
+  onVideoRemoved(id) {
+    let state = this.cache || this.load();
+    if (!state) return;
+
+    let modified = false;
+    if (state.deck && state.deck.includes(id)) {
+      state.deck = state.deck.filter(x => x !== id);
+      modified = true;
+    }
+    if (state.used_ids && state.used_ids.includes(id)) {
+      state.used_ids = state.used_ids.filter(x => x !== id);
+      modified = true;
+    }
+    if (state.current_ids && state.current_ids.includes(id)) {
+      state.current_ids = state.current_ids.filter(x => x !== id);
+      if (state.deck && state.deck.length > 0) {
+        const replacement = state.deck.shift();
+        state.current_ids.push(replacement);
+      }
+      modified = true;
+    }
+    if (modified) {
+      this.save(state);
+      logger.info('Suggestions', `Removed video ${id} from suggestions state`);
+    }
+  }
+}
+const suggestionsManager = new SuggestionsManager(STORAGE_PATH);
+
 const chokidar = require('chokidar');
 
 function slugify(name) { return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); }
@@ -462,6 +630,7 @@ function transcode(video, inputOverride) {
       } catch {}
       logger.info('Transcode', `Done: ${video.id}`);
       db.prepare('UPDATE videos SET status = ?, has_480p = 0, has_360p = 0 WHERE id = ?').run('ready', video.id);
+      suggestionsManager.onVideoAdded(video.id); // vidme-suggested: queue new video into deck
       // Clean up staging file immediately after successful transcode (3-artifact policy)
       if (stagingInput && fs.existsSync(stagingInput)) {
         try { fs.rmSync(stagingInput, { force: true }); } catch (e) {}
@@ -826,6 +995,11 @@ app.post('/api/upload', upload.single('video'), (req, res) => {
 });
 
 // Video CRUD
+// vidme-suggested: server-side round-robin deck (zero-lock JSON)
+app.get('/api/suggestions', (req, res) => {
+  res.json(suggestionsManager.getSuggestions());
+});
+
 app.get('/api/videos', (req, res) => {
   const sql = req.query.folder_id ? 'SELECT * FROM videos WHERE folder_id = ? ORDER BY is_pinned DESC, created_at DESC' : 'SELECT * FROM videos ORDER BY is_pinned DESC, created_at DESC';
   res.json(req.query.folder_id ? db.prepare(sql).all(req.query.folder_id) : db.prepare(sql).all());
@@ -873,6 +1047,7 @@ app.patch('/api/videos/:id/pin', (req, res) => {
   res.json(db.prepare('SELECT * FROM videos WHERE id = ?').get(req.params.id));
 });
 app.delete('/api/videos/:id', (req, res) => {
+  suggestionsManager.onVideoRemoved(req.params.id); // vidme-suggested: remove from deck/current
   const video = db.prepare('SELECT * FROM videos WHERE id = ?').get(req.params.id);
   if (!video) return res.status(404).json({ error: 'Video not found' });
   for (const file of [
