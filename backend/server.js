@@ -233,7 +233,18 @@ async function initTus() {
         err.status_code = 400; err.body = 'Folder not found\n';
         throw err;
       }
-      // vidme-anti-duplicate: cegah duplikat upload bersamaan (< 10 menit atau status processing)
+      // vidme-anti-duplicate: 1. Cek in-flight TUS upload yang sedang berlangsung
+      const dupKey = (title + '::' + (upload.size || '')).toLowerCase();
+      const active = inFlightTusUploads.get(dupKey);
+      if (active && (Date.now() - active.time) < 3600000) {
+        logger.warn('TUS', 'Duplicate in-flight upload rejected: "' + title + '" (active videoId: ' + active.videoId + ')');
+        const err = new Error('Video currently uploading');
+        err.status_code = 409;
+        err.body = 'Conflict: Video currently uploading\n';
+        throw err;
+      }
+
+      // vidme-anti-duplicate: 2. Cek DB jika video sudah selesai/sedang transcode (< 10 menit)
       const recentDup = db.prepare(`
         SELECT id, status FROM videos
         WHERE title = ?
@@ -249,8 +260,9 @@ async function initTus() {
       }
 
       const videoId = crypto.randomUUID();
+      inFlightTusUploads.set(dupKey, { time: Date.now(), videoId });
       logger.request('TUS', 'Create: "' + title + '" | ' + filename);
-      const meta = Object.assign({}, upload.metadata, { videoId: videoId, title: title, folderId: folderId || '', filename: filename });
+      const meta = Object.assign({}, upload.metadata, { videoId: videoId, title: title, folderId: folderId || '', filename: filename, dupKey: dupKey });
       return { metadata: meta };
     },
     async onUploadFinish(req, upload) {
@@ -260,6 +272,7 @@ async function initTus() {
       const tusPath = path.join(TUS_CHUNKS, upload.id);
       const stagingPath = path.join(STAGING, videoId + '.mp4');
       const fail = (msg, code, body) => {
+        if (upload.metadata && upload.metadata.dupKey) inFlightTusUploads.delete(upload.metadata.dupKey);
         try { fs.rmSync(tusPath, { force: true }); } catch (e) {}
         try { fs.rmSync(tusPath + '.json', { force: true }); } catch (e) {}
         try { fs.rmSync(stagingPath, { force: true }); } catch (e) {}
@@ -292,6 +305,7 @@ async function initTus() {
           return {};
         }
 
+        if (upload.metadata && upload.metadata.dupKey) inFlightTusUploads.delete(upload.metadata.dupKey);
         fs.renameSync(tusPath, stagingPath);
         try { fs.rmSync(tusPath + '.json', { force: true }); } catch (e) {}
         db.prepare('INSERT INTO videos (id, title, filename, folder_id, size_bytes) VALUES (?, ?, ?, ?, ?)').run(videoId, title, videoId + '.mp4', folderId || null, stat.size);
