@@ -193,6 +193,7 @@ for (const dir of [ORIGINAL, TRANSCODED, THUMBNAILS, STAGING, WEBDAV_INBOX]) fs.
 // -- TUS (ESM-only @tus/* loaded via dynamic import; CJS server.js cannot require them) --
 let TusServer = null;
 let TusFileStore = null;
+const inFlightTusUploads = new Map();
 let tusServer = null;
 const TUS_CHUNKS = path.join(STORAGE_PATH, 'tus-chunks');
 fs.mkdirSync(TUS_CHUNKS, { recursive: true });
