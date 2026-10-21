@@ -521,7 +521,7 @@
 /* vidme-rc3.1 */
 /* vidme-rc3 */
 const $ = s => document.querySelector(s);
-const state = { videos: [], folders: [], folderTree: [], folder: null, selectMode: false, selected: new Set(), uploads: [] };
+const state = { videos: [], folders: [], folderTree: [], folder: null, selectMode: false, selected: new Set(), uploads: [], suggestions: [] };
 // vidme-paging: 16 card/page; page HANYA di Home utama (tanpa folder/search) via ?page=N
 const PAGE_SIZE = 20; // vidme-v27: 20 card/page (keputusan user 25-09-26)
 state.page = 1;
@@ -535,19 +535,7 @@ function pageUrl(n) {
   return u.pathname + (u.searchParams.toString() ? '?' + u.searchParams.toString() : '');
 }
 function clampPage(totalPages) { if (state.page > totalPages) state.page = totalPages; if (state.page < 1) state.page = 1; }
-// vidme-suggested: shuffle deterministic, seed = shift 6 jam (ganti tiap 6 jam, keputusan user 25-09-26)
-function _seededShuffle(arr, seed) {
-  const a = arr.slice();
-  let s = seed >>> 0;
-  const rnd = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
-  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
-  return a;
-}
-function suggestedVideos(vs) {
-  const pool = vs.filter(v => !v.is_pinned && v.status === 'ready');
-  const seed = Math.floor(Date.now() / (6 * 3600 * 1000));
-  return _seededShuffle(pool, seed + 7).slice(0, 15); // vidme-v27: slice 15 (15 desktop; mobile 12 via CSS)
-}
+// vidme-suggested: managed server-side via /api/suggestions (round-robin deck, zero-lock JSON)
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":' &#39;'}[c]));
 function slugify(name) { return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); }
 // vidme-library: openVideo ikutkan konteks folder virtual → URL /library/<view>/v/:id (22-09-26)
@@ -1343,7 +1331,7 @@ function render() {
     html += paginationBar(state.page, _totalPages);
   } else if (isMainView) {
     // vidme-suggested: 12 video acak, ganti tiap 6 jam (seed 6-hourly, keputusan user)
-    const sugg = suggestedVideos(vs);
+    const sugg = (state.suggestions && state.suggestions.length) ? state.suggestions : [];
     if (sugg.length) html += `<section><h3 class="mb-3 font-heading text-lg flex items-center gap-2"><span class="material-symbols-outlined text-indigo-300" style="font-size:18px">auto_awesome</span>Suggested</h3><div class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 sugg-grid">${sugg.map(card).join('')}</div></section>`; // vidme-v27: sugg-grid class (12 mobile / 15 desktop)
     // vidme-explore: bridge home -> /?page=1
     html += `<div style="display:flex;justify-content:center;padding:28px 0 8px"><button class="button" id="exploreMoreBtn" type="button"><svg class="svgIcon" viewBox="0 0 512 512" height="1em" xmlns="http://www.w3.org/2000/svg"><path d="M256 512A256 256 0 1 0 256 0a256 256 0 1 0 0 512zm50.7-186.9L162.4 380.6c-19.4 7.5-38.5-11.6-31-31l55.5-144.3c3.3-8.5 9.9-15.1 18.4-18.4l144.3-55.5c19.4-7.5 38.5 11.6 31 31L325.1 306.7c-3.2 8.5-9.9 15.1-18.4 18.4zM288 256a32 32 0 1 0 -64 0 32 32 0 1 0 64 0z"></path></svg>Explore</button></div>`; // vidme-v27: explore v2 html
@@ -1485,7 +1473,8 @@ function parseUrlFolder() {
   return null;
 }
 async function load() {
-  const [videos, folderTree] = await Promise.all([api('/api/videos'), api('/api/folders')]);
+  const [videos, folderTree, sugg] = await Promise.all([api('/api/videos'), api('/api/folders'), api('/api/suggestions').catch(()=>[])]);
+  state.suggestions = sugg || [];
   state.videos = videos;
   reconcileUploads(); // vidme-bugfix-1021
   state.folderTree = folderTree;
