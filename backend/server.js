@@ -11,7 +11,8 @@ const db = require('./db/sqlite');
 // ── VidMe Suggestions Engine: Round-Robin Shuffled Deck (Zero-Lock JSON) ──
 class SuggestionsManager {
   constructor(storagePath) {
-    this.filePath = path.join(storagePath, 'suggestions.json');
+    const sp = storagePath || process.env.STORAGE_PATH || '/storage';
+    this.filePath = path.join(sp, 'suggestions.json');
     this.cache = null;
   }
 
@@ -173,7 +174,7 @@ class SuggestionsManager {
     }
   }
 }
-const suggestionsManager = new SuggestionsManager(STORAGE_PATH);
+// instantiated below after STORAGE_PATH
 
 const chokidar = require('chokidar');
 
@@ -181,6 +182,7 @@ function slugify(name) { return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').r
 
 const PORT = Number(process.env.PORT || 4100);
 const STORAGE_PATH = process.env.STORAGE_PATH || '/storage';
+const suggestionsManager = new SuggestionsManager(STORAGE_PATH);
 const ORIGINAL = path.join(STORAGE_PATH, 'original');
 const TRANSCODED = path.join(STORAGE_PATH, 'transcoded');
 const THUMBNAILS = path.join(STORAGE_PATH, 'thumbnails');
