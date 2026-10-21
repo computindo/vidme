@@ -799,7 +799,11 @@ function showFolderPicker(title) {
   });
 }
 
+let _submittingUpload = false;
 function openModal() {
+  _submittingUpload = false;
+  const btn = $('#startUploadBtn');
+  if (btn) { btn.disabled = false; btn.textContent = 'Start Upload'; }
   const card = $('#uploadForm');
   card.style.top = '50%';
   card.style.left = '50%';
@@ -809,6 +813,9 @@ function openModal() {
 function closeModal() {
   $('#modal').style.display = 'none';
   $('#uploadForm').reset();
+  _submittingUpload = false;
+  const btn = $('#startUploadBtn');
+  if (btn) { btn.disabled = false; btn.textContent = 'Start Upload'; }
   $('#fileName').textContent = 'Drop a video here or click to browse';
 }
 // ── Draggable upload modal ──
@@ -1691,15 +1698,28 @@ $('#drop').ondrop = async e => { // vidme-mupload: codec-gate per file, invalid 
 // vidme-mupload: simpan {uploadId,file,folderId,filename} utk pumpQueue — SW start butuh Blob via postMessage
 let _idbQueue = [];
 const _origIdbPut = idbPut;
-idbPut = function(k, v) { if (v && v.status === 'uploading' && v.file) { _idbQueue.push({ uploadId: k, file: v.file, folderId: v.folderId, filename: v.filename }); if (_idbQueue.length > 20) _idbQueue = _idbQueue.slice(-20); } return _origIdbPut(k, v); };
+idbPut = function(k, v) { if (v && (v.status === 'uploading' || v.status === 'queued') && v.file) { _idbQueue.push({ uploadId: k, file: v.file, folderId: v.folderId, filename: v.filename }); if (_idbQueue.length > 20) _idbQueue = _idbQueue.slice(-20); } return _origIdbPut(k, v); };
 
 $('#uploadForm').onsubmit = async e => {
   e.preventDefault();
+  if (_submittingUpload) return;
+  _submittingUpload = true;
+  const btn = $('#startUploadBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Starting...'; }
   const fileInput = $('#file');
   const file = fileInput.files[0];
-  if (!file) return;
+  if (!file) {
+    _submittingUpload = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Start Upload'; }
+    return;
+  }
   const _gate = await detectVideoCodec(file); // vidme-codecgate: hard gate sebelum IDB/SW
-  if (!_gate.ok) { codecGateToast(_gate); return; }
+  if (!_gate.ok) {
+    codecGateToast(_gate);
+    _submittingUpload = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Start Upload'; }
+    return;
+  }
   const _files = [...fileInput.files]; // vidme-mupload: capture SEBELUM closeModal (form bisa ke-reset)
   const _formTitle = ($('#titleInput')?.value || '').trim();
   const folderId = $('#folderSelect').value || null;
@@ -1716,7 +1736,7 @@ $('#uploadForm').onsubmit = async e => {
     await idbPut(clientUploadId, {
       uploadId: clientUploadId, file, title, folderId, filename: file.name,
       totalSize: file.size, totalChunks: Math.ceil(file.size / (5*1024*1024)),
-      serverUploadId: null, lastChunk: -1, status: 'uploading',
+      serverUploadId: null, lastChunk: -1, status: 'queued',
       startedAt: Date.now(), lastActivity: Date.now()
     });
     uploadQueue.push(clientUploadId);

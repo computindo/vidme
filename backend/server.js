@@ -233,6 +233,21 @@ async function initTus() {
         err.status_code = 400; err.body = 'Folder not found\n';
         throw err;
       }
+      // vidme-anti-duplicate: cegah duplikat upload bersamaan (< 10 menit atau status processing)
+      const recentDup = db.prepare(`
+        SELECT id, status FROM videos
+        WHERE title = ?
+          AND (status = 'processing' OR (strftime('%s', 'now') - strftime('%s', created_at)) < 600)
+        ORDER BY created_at DESC LIMIT 1
+      `).get(title);
+      if (recentDup) {
+        logger.warn('TUS', 'Duplicate upload rejected: "' + title + '" (already exists as ' + recentDup.id + ', status: ' + recentDup.status + ')');
+        const err = new Error('Video already uploaded or currently processing');
+        err.status_code = 409;
+        err.body = 'Conflict: Video already uploaded or currently processing\n';
+        throw err;
+      }
+
       const videoId = crypto.randomUUID();
       logger.request('TUS', 'Create: "' + title + '" | ' + filename);
       const meta = Object.assign({}, upload.metadata, { videoId: videoId, title: title, folderId: folderId || '', filename: filename });
@@ -268,6 +283,15 @@ async function initTus() {
           logger.error('TUS', 'File too small (' + stat.size + ' bytes): "' + title + '"');
           fail('too small', 422, 'File too small\n');
         }
+        // vidme-anti-duplicate: verifikasi safety net sebelum INSERT ke DB
+        const existingVideo = db.prepare('SELECT id FROM videos WHERE title = ? AND size_bytes = ?').get(title, stat.size);
+        if (existingVideo) {
+          logger.warn('TUS', 'Duplicate finish prevented for "' + title + '" -> matches existing ' + existingVideo.id);
+          try { fs.rmSync(tusPath, { force: true }); } catch (e) {}
+          try { fs.rmSync(tusPath + '.json', { force: true }); } catch (e) {}
+          return {};
+        }
+
         fs.renameSync(tusPath, stagingPath);
         try { fs.rmSync(tusPath + '.json', { force: true }); } catch (e) {}
         db.prepare('INSERT INTO videos (id, title, filename, folder_id, size_bytes) VALUES (?, ?, ?, ?, ?)').run(videoId, title, videoId + '.mp4', folderId || null, stat.size);
