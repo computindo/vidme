@@ -5,7 +5,7 @@
 // VidMe Service Worker v5 — native fetch TUS client.
 // No tus-js-client: its browser stack is XHR-only, and SW has no XMLHttpRequest.
 // TUS flow: POST create -> Location; PATCH chunks w/ Upload-Offset; HEAD for resume; DELETE to cancel.
-const CACHE = "vidme-v2.9.4";
+const CACHE = "vidme-v2.9.5";
 const STATIC = ['/', '/index.html', '/player.html'];
 const DB_NAME = 'vidme-uploads';
 const DB_STORE = 'uploads';
@@ -78,6 +78,7 @@ async function idbDel(key) {
 
 // -- Active uploads: uploadId -> AbortController --
 const activeUploads = new Map();
+const startingUploads = new Set();
 
 function broadcast(msg) {
   self.clients.matchAll().then(clients => clients.forEach(c => c.postMessage(msg)));
@@ -100,6 +101,7 @@ function patchAbortable(err) {
 
 // -- Core upload: native fetch TUS --
 async function doUpload(uploadId, file, title, folderId, filename, tusUrl) {
+  if (activeUploads.has(uploadId)) return;
   const ctrl = new AbortController();
   activeUploads.set(uploadId, ctrl);
   const signal = ctrl.signal;
@@ -261,7 +263,7 @@ async function doUpload(uploadId, file, title, folderId, filename, tusUrl) {
 
 // -- Resume: rehydrate from IDB and continue via TUS offset --
 async function resumeUpload(uploadId) {
-  if (activeUploads.has(uploadId)) return;
+  if (activeUploads.has(uploadId) || startingUploads.has(uploadId)) return;
   const rec = await idbGet(uploadId);
   if (!rec || rec.status !== 'uploading') return;
   if (Date.now() - rec.startedAt > STALE_THRESHOLD) {
@@ -293,8 +295,11 @@ async function resumeAll() {
       await idbDel(rec.uploadId).catch(() => {});
       continue;
     }
-    if (!activeUploads.has(rec.uploadId)) {
-      doUpload(rec.uploadId, rec.file, rec.title, rec.folderId, rec.filename, rec.tusUrl || null).catch(() => {});
+    if (!activeUploads.has(rec.uploadId) && !startingUploads.has(rec.uploadId)) {
+      startingUploads.add(rec.uploadId);
+      doUpload(rec.uploadId, rec.file, rec.title, rec.folderId, rec.filename, rec.tusUrl || null)
+        .catch(() => {})
+        .finally(() => startingUploads.delete(rec.uploadId));
     }
   }
 }
@@ -307,6 +312,8 @@ self.addEventListener('message', async (e) => {
     const _swExt = (d.filename || '').split('.').pop().toLowerCase();
     const _swValid = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'ts', 'm4v', '3gp', 'flv', 'wmv'].includes(_swExt);
     if (!_swValid) { broadcast({ type: 'sw-upload-done', uploadId: d.uploadId, ok: false, success: false, error: 'Format tidak didukung: .' + _swExt, status: 'error' }); return; }
+    if (startingUploads.has(d.uploadId) || activeUploads.has(d.uploadId)) return;
+    startingUploads.add(d.uploadId);
     // Seed IDB record if page did not
     idbGet(d.uploadId).then(rec => {
       if (!rec) {
@@ -317,7 +324,11 @@ self.addEventListener('message', async (e) => {
         }).catch(() => {});
       }
     }).catch(() => {}).finally(() => {
-      doUpload(d.uploadId, d.file, d.title, d.folderId, d.filename, null).catch(() => {});
+      try {
+        doUpload(d.uploadId, d.file, d.title, d.folderId, d.filename, null).catch(() => {});
+      } finally {
+        startingUploads.delete(d.uploadId);
+      }
     });
   }
 
