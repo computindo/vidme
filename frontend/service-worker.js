@@ -5,7 +5,7 @@
 // VidMe Service Worker v5 — native fetch TUS client.
 // No tus-js-client: its browser stack is XHR-only, and SW has no XMLHttpRequest.
 // TUS flow: POST create -> Location; PATCH chunks w/ Upload-Offset; HEAD for resume; DELETE to cancel.
-const CACHE = "vidme-v2.9.2";
+const CACHE = "vidme-v2.9.3";
 const STATIC = ['/', '/index.html', '/player.html'];
 const DB_NAME = 'vidme-uploads';
 const DB_STORE = 'uploads';
@@ -236,9 +236,23 @@ async function doUpload(uploadId, file, title, folderId, filename, tusUrl) {
       broadcast({ type: 'sw-upload-done', uploadId, success: false, title, status: 'error', message: String((err && err.message) || err) });
       return;
     }
-    // Upload was in-progress (tusUrl exists): keep IDB record as 'uploading'
-    // so online-event/interval resume can pick up. Don't broadcast error —
-    // user doesn't see a failure toast, upload silently resumes when connection returns.
+    // Upload was in-progress (tusUrl exists).
+    // vidme-bugfix-1021: detect server-finished state (404/410 on HEAD) vs real disconnect.
+    // If server already processed the file it removes tus-chunks → HEAD returns 404.
+    // Old code treated all errors the same → IDB record stuck as 'uploading' forever.
+    const isServerDone = err && (
+      err.message?.includes('HEAD failed: HTTP 404') ||
+      err.message?.includes('HEAD failed: HTTP 410') ||
+      err.message?.includes('resume HEAD failed: HTTP 404') ||
+      err.message?.includes('resume HEAD failed: HTTP 410')
+    );
+    if (isServerDone) {
+      // Upload is actually complete on the server side — clean up and declare done
+      await idbDel(uploadId).catch(() => {});
+      broadcast({ type: 'sw-upload-done', uploadId, success: true, title, status: 'done' });
+      return;
+    }
+    // Real network disconnect: keep IDB so resume can pick up
     if (rec) { rec.status = 'uploading'; rec.lastActivity = Date.now(); idbPut(uploadId, rec).catch(() => {}); }
     return;
   }
