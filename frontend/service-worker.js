@@ -5,14 +5,22 @@
 // VidMe Service Worker v5 — native fetch TUS client.
 // No tus-js-client: its browser stack is XHR-only, and SW has no XMLHttpRequest.
 // TUS flow: POST create -> Location; PATCH chunks w/ Upload-Offset; HEAD for resume; DELETE to cancel.
-const CACHE = "vidme-v2.9.5";
+// vidme-adaptive-cache: bump supaya client ambil SW baru (hard-refresh 2x)
+const CACHE = "vidme-v2.9.6";
 const STATIC = ['/', '/index.html', '/player.html'];
 const DB_NAME = 'vidme-uploads';
 const DB_STORE = 'uploads';
 const HEARTBEAT_INTERVAL = 15000;
 const STALE_THRESHOLD = 24 * 60 * 60 * 1000; // 24h
 const TUS_ENDPOINT = '/api/upload/tus';
-const TUS_CHUNK_SIZE = 4 * 1024 * 1024; // vidme-rc4: 4MB — keputusan Naufal, struktur chunk jangan diubah (hindari load peak server)
+// vidme-adaptive-const (22-10-26, keputusan Naufal):
+// 4MB tetap default & fallback — persis keputusan 19-09-26 untuk link lambat (hindari load peak
+// server + retry murah). Naik ke 8MB HANYA kalau link kenceng (>1.0 MB/s, terukur +11%).
+const TUS_CHUNK_SIZE_SMALL = 4 * 1024 * 1024;
+const TUS_CHUNK_SIZE_LARGE = 8 * 1024 * 1024;
+const TUS_SPEED_UP_MBPS   = 1.0; // _speedEma/1048576 > ini  -> 8MB
+const TUS_SPEED_DOWN_MBPS = 0.9; // _speedEma/1048576 < ini  -> balik 4MB
+let TUS_CHUNK_SIZE = TUS_CHUNK_SIZE_SMALL;
 const TUS_RETRIES = 5;
 const TUS_RETRY_DELAY = 800; // vidme-rc3: was 1000 — pemulihan lebih cepat di link naik-turun
 // 18-09-26: slow-network hardening
@@ -24,6 +32,15 @@ function _updateSpeed(bytes, secs) {
   if (!(secs > 0) || !(bytes > 0)) return;
   const inst = bytes / secs;
   _speedEma = _speedEma ? (_speedEma * 0.7 + inst * 0.3) : inst;
+}
+// vidme-adaptive-fn: hysteresis 0.1 MB/s biar ukuran chunk nggak goyang tiap chunk.
+// _speedEma sengaja GLOBAL (satu buat semua upload, UPLOAD_CONCURRENCY=2): link dibagi 2 upload,
+// jadi angka gabungan = kapasitas link asli, itu yang nentuin ukuran chunk.
+function _syncChunkSize() {
+  const mbps = _speedEma / 1048576;
+  if (mbps > TUS_SPEED_UP_MBPS)       TUS_CHUNK_SIZE = TUS_CHUNK_SIZE_LARGE;
+  else if (mbps < TUS_SPEED_DOWN_MBPS) TUS_CHUNK_SIZE = TUS_CHUNK_SIZE_SMALL;
+  // di antara 0.9..1.0 -> TAHAN nilai sebelumnya
 }
 
 // -- IndexedDB helpers (survives SW restart) --
@@ -142,6 +159,9 @@ async function doUpload(uploadId, file, title, folderId, filename, tusUrl) {
     }
 
     while (offset < file.size) {
+      // vidme-adaptive-call: baca ulang ukuran chunk SEBELUM ngitung end.
+      // Iterasi pertama _speedEma = 0 -> < 0.9 -> tetap 4MB (perilaku lama).
+      _syncChunkSize();
       const end = Math.min(offset + TUS_CHUNK_SIZE, file.size);
       const body = file.slice(offset, end);
       let newOffset = null;
