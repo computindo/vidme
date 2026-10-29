@@ -28,6 +28,15 @@ pub async fn get_video(pool: &SqlitePool, id: &str) -> Result<Option<Video>, sql
         .await
 }
 
+pub async fn find_recent_duplicate(pool: &SqlitePool, title: &str) -> Result<Option<Video>, sqlx::Error> {
+    sqlx::query_as::<_, Video>(
+        "SELECT * FROM videos WHERE title = ? AND (status = 'processing' OR (julianday('now') - julianday(created_at)) * 86400 < 600) LIMIT 1"
+    )
+    .bind(title)
+    .fetch_optional(pool)
+    .await
+}
+
 pub async fn insert_video(
     pool: &SqlitePool,
     id: &str,

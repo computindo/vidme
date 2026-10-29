@@ -24,6 +24,7 @@ struct TusUploadMeta {
     title: String,
     filename: String,
     folder_id: Option<String>,
+    dup_key: Option<String>,
 }
 
 fn parse_tus_metadata(header_val: &str) -> (String, Option<String>, String) {
@@ -98,6 +99,31 @@ pub async fn create_upload(
         ("upload.mp4".into(), None, "untitled".into())
     };
 
+    // vidme-anti-duplicate: 1. Cek in-flight TUS upload yang sedang berlangsung
+    let dup_key = format!("{}::{}", title, upload_length).to_lowercase();
+    {
+        let mut in_flight = state.in_flight_uploads.lock().await;
+        in_flight.retain(|_, time| time.elapsed() < std::time::Duration::from_secs(3600));
+        if in_flight.contains_key(&dup_key) {
+            tracing::warn!("TUS duplicate in-flight upload rejected: '{}'", title);
+            return Err((
+                StatusCode::CONFLICT,
+                "Conflict: Video currently uploading\n".to_string(),
+            ));
+        }
+
+        // vidme-anti-duplicate: 2. Cek DB jika video sudah selesai/sedang transcode (< 10 menit)
+        if let Ok(Some(_)) = db::videos::find_recent_duplicate(&state.pool, &title).await {
+            tracing::warn!("TUS duplicate recent upload rejected: '{}'", title);
+            return Err((
+                StatusCode::CONFLICT,
+                "Conflict: Video already uploaded or currently processing\n".to_string(),
+            ));
+        }
+
+        in_flight.insert(dup_key.clone(), std::time::Instant::now());
+    }
+
     let video_id = Uuid::new_v4().to_string();
     let meta_obj = TusUploadMeta {
         upload_length,
@@ -105,6 +131,7 @@ pub async fn create_upload(
         title,
         filename,
         folder_id,
+        dup_key: Some(dup_key),
     };
 
     let meta_json = serde_json::to_string(&meta_obj).unwrap_or_default();
@@ -245,6 +272,12 @@ pub async fn upload_chunk(
             let _ = tokio::fs::rename(&chunk_path, &staging_path).await;
             let _ = tokio::fs::remove_file(&meta_path).await;
 
+            // Release in-flight mutex
+            if let Some(ref dk) = meta_info.dup_key {
+                let mut in_flight = state.in_flight_uploads.lock().await;
+                in_flight.remove(dk);
+            }
+
             // Insert DB
             let dest_filename = format!("{}.mp4", meta_info.video_id);
             if let Err(e) = db::videos::insert_video(
@@ -298,6 +331,15 @@ pub async fn terminate_upload(
 ) -> Result<Response, (StatusCode, String)> {
     let chunk_path = format!("{}/tus-chunks/{}", state.config.storage_path, id);
     let meta_path = format!("{}/tus-chunks/{}.meta", state.config.storage_path, id);
+
+    if let Ok(meta_str) = tokio::fs::read_to_string(&meta_path).await {
+        if let Ok(meta_info) = serde_json::from_str::<TusUploadMeta>(&meta_str) {
+            if let Some(ref dk) = meta_info.dup_key {
+                let mut in_flight = state.in_flight_uploads.lock().await;
+                in_flight.remove(dk);
+            }
+        }
+    }
 
     let _ = tokio::fs::remove_file(&chunk_path).await;
     let _ = tokio::fs::remove_file(&meta_path).await;

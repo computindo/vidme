@@ -31,8 +31,23 @@ export async function abortTusUpload(location) {
   } catch (_) {}
 }
 
+// Adaptive TUS Chunk Size Configuration (parity with main v2.9.6)
+const TUS_CHUNK_SIZE_SMALL = 4 * 1024 * 1024; // 4MB default / fallback
+const TUS_CHUNK_SIZE_LARGE = 8 * 1024 * 1024; // 8MB high-speed
+const TUS_SPEED_UP_MBPS = 1.0;                // speed > 1.0 MB/s -> switch to 8MB
+const TUS_SPEED_DOWN_MBPS = 0.9;              // speed < 0.9 MB/s -> fall back to 4MB
+
 export async function uploadTusFile(file, folderId, onProgress, signal) {
-  const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB chunks
+  let chunkSize = TUS_CHUNK_SIZE_SMALL;
+
+  function syncChunkSize(speed) {
+    const mbps = speed / 1048576;
+    if (mbps > TUS_SPEED_UP_MBPS) {
+      chunkSize = TUS_CHUNK_SIZE_LARGE;
+    } else if (mbps < TUS_SPEED_DOWN_MBPS) {
+      chunkSize = TUS_CHUNK_SIZE_SMALL;
+    }
+  }
   const isAllowed = await detectVideoCodec(file);
   if (!isAllowed) {
     throw new Error('Hanya video H.264 yang diperbolehkan. Silakan convert terlebih dahulu.');
@@ -73,7 +88,8 @@ export async function uploadTusFile(file, folderId, onProgress, signal) {
       throw new Error('Upload dibatalkan');
     }
 
-    const chunkEnd = Math.min(offset + CHUNK_SIZE, file.size);
+    syncChunkSize(speedEma);
+    const chunkEnd = Math.min(offset + chunkSize, file.size);
     const chunkBlob = file.slice(offset, chunkEnd);
     const chunkStart = Date.now();
 

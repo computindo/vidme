@@ -1,8 +1,10 @@
 use crate::config::Config;
 use crate::media::worker::ProcessJob;
 use sqlx::SqlitePool;
+use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{broadcast, mpsc};
+use std::time::Instant;
+use tokio::sync::{broadcast, mpsc, Mutex};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -10,6 +12,7 @@ pub struct AppState {
     pub config: Arc<Config>,
     pub sse_tx: broadcast::Sender<String>,
     pub worker_tx: mpsc::Sender<ProcessJob>,
+    pub in_flight_uploads: Arc<Mutex<HashMap<String, Instant>>>,
 }
 
 impl AppState {
@@ -24,6 +27,7 @@ impl AppState {
             config: Arc::new(config),
             sse_tx,
             worker_tx,
+            in_flight_uploads: Arc::new(Mutex::new(HashMap::new())),
         };
         (state, sse_rx)
     }
