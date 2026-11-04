@@ -4,6 +4,7 @@
   const isHomeActive = $derived(!appState.virtualView && !appState.activeFolderId && appState.currentRoute !== "player");
 </script>
 
+{#if !appState.isSelectMode}
 <nav id="bottomNav" class="fixed inset-x-0 bottom-0 z-40 flex justify-around items-center border-t border-slate-800 bg-[#10182b] p-3 lg:hidden select-none">
   <button
     onclick={() => appState.navigate("/")}
@@ -42,3 +43,4 @@
     <span>Library</span>
   </button>
 </nav>
+{/if}

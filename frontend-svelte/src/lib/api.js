@@ -105,3 +105,50 @@ export function initSSE() {
 
   return es;
 }
+
+export async function fetchSuggestions() {
+  try {
+    const res = await fetch('/api/suggestions');
+    if (res.ok) {
+      appState.suggestions = await res.json();
+    }
+  } catch (err) {
+    console.error('Failed to fetch suggestions:', err);
+  }
+}
+
+export async function bulkDeleteVideos(ids) {
+  if (!ids || ids.length === 0) return;
+  try {
+    await Promise.all(ids.map((id) => fetch(`/api/videos/${id}`, { method: 'DELETE' })));
+    appState.videos = appState.videos.filter((v) => !ids.includes(v.id));
+    appState.selectedIds = [];
+    appState.isSelectMode = false;
+    appState.addToast(`${ids.length} video berhasil dihapus`, 'success');
+  } catch (err) {
+    appState.addToast(`Gagal menghapus video: ${err.message}`, 'error');
+  }
+}
+
+export async function bulkPinVideos(ids, isPinned) {
+  if (!ids || ids.length === 0) return;
+  try {
+    await Promise.all(
+      ids.map((id) =>
+        fetch(`/api/videos/${id}/pin`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ is_pinned: isPinned }),
+        })
+      )
+    );
+    appState.videos = appState.videos.map((v) =>
+      ids.includes(v.id) ? { ...v, is_pinned: isPinned ? 1 : 0 } : v
+    );
+    appState.selectedIds = [];
+    appState.isSelectMode = false;
+    appState.addToast(`${ids.length} video ${isPinned ? 'disematkan' : 'batal disematkan'}`, 'success');
+  } catch (err) {
+    appState.addToast(`Gagal pin video: ${err.message}`, 'error');
+  }
+}

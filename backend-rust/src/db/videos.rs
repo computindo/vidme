@@ -208,3 +208,12 @@ pub async fn delete_video(pool: &SqlitePool, id: &str) -> Result<bool, sqlx::Err
         .await?;
     Ok(res.rows_affected() > 0)
 }
+
+pub async fn get_suggestions(pool: &SqlitePool, limit: i64) -> Result<Vec<Video>, sqlx::Error> {
+    sqlx::query_as::<_, Video>(
+        "SELECT * FROM videos WHERE status = 'ready' AND is_pinned = 0 ORDER BY RANDOM() LIMIT ?"
+    )
+    .bind(limit)
+    .fetch_all(pool)
+    .await
+}

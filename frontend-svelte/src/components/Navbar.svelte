@@ -69,6 +69,16 @@
   </div>
 
   <div class="flex items-center gap-2">
+    <!-- Select Mode Toggle Button -->
+    <button
+      onclick={() => appState.toggleSelectMode()}
+      class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer {appState.isSelectMode ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/40' : 'bg-[#1a2236] text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-700/60'}"
+      title="Mode Pilih Video"
+    >
+      <span class="material-symbols text-base">checklist</span>
+      <span class="hidden sm:inline">Select</span>
+    </button>
+
     <button
       class="flex h-10 w-10 items-center justify-center rounded-lg text-theme-muted hover:bg-theme-card hover:text-white md:hidden"
       onclick={() => appState.toggleMobileSearch()}
@@ -76,12 +86,14 @@
     >
       <span class="material-symbols">{appState.mobileSearchOpen ? "close" : "search"}</span>
     </button>
+
+    <!-- Upload Button: Desktop only (hidden on mobile to prevent duplicate with BottomNav) -->
     <button
       onclick={() => (appState.uploadDrawerOpen = !appState.uploadDrawerOpen)}
-      class="flex items-center gap-1.5 rounded-full bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-md shadow-indigo-600/20 transition-colors hover:bg-indigo-500 active:scale-95"
+      class="hidden lg:flex items-center gap-1.5 rounded-full bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-md shadow-indigo-600/20 transition-colors hover:bg-indigo-500 active:scale-95"
     >
       <span class="material-symbols text-lg">upload</span>
-      <span class="hidden sm:inline">Upload</span>
+      <span>Upload</span>
     </button>
   </div>
 </header>

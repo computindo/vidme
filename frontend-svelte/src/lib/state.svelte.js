@@ -21,6 +21,11 @@ class GlobalState {
   toasts = $state([]);
   isLoading = $state(false);
 
+  // Multi-select mode
+  isSelectMode = $state(false);
+  selectedIds = $state([]);
+  suggestions = $state([]);
+
   // Derived: Active video object
   activeVideo = $derived(
     this.activeVideoId ? this.videos.find((v) => v.id === this.activeVideoId) || null : null
@@ -78,6 +83,29 @@ class GlobalState {
 
   toggleMobileSearch() {
     this.mobileSearchOpen = !this.mobileSearchOpen;
+  }
+
+  toggleSelectMode() {
+    this.isSelectMode = !this.isSelectMode;
+    if (!this.isSelectMode) {
+      this.selectedIds = [];
+    }
+  }
+
+  toggleVideoSelection(id) {
+    if (this.selectedIds.includes(id)) {
+      this.selectedIds = this.selectedIds.filter((x) => x !== id);
+    } else {
+      this.selectedIds = [...this.selectedIds, id];
+    }
+  }
+
+  selectAllVisible(ids) {
+    this.selectedIds = [...new Set([...this.selectedIds, ...ids])];
+  }
+
+  clearSelection() {
+    this.selectedIds = [];
   }
 
   addToast(message, type = "info", duration = 3000) {

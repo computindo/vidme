@@ -15,10 +15,11 @@
 
   const totalPages = $derived(Math.max(1, Math.ceil(nonPinnedVideos.length / PAGE_SIZE)));
 
+  const suggestedList = $derived(
+    appState.suggestions.length > 0 ? appState.suggestions : nonPinnedVideos.slice(0, 15)
+  );
+
   const pagedVideos = $derived.by(() => {
-    if (isHomeLanding) {
-      return nonPinnedVideos.slice(0, 15);
-    }
     const start = (appState.page - 1) * PAGE_SIZE;
     return nonPinnedVideos.slice(start, start + PAGE_SIZE);
   });
@@ -60,7 +61,7 @@
         </h2>
       </div>
       <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-        {#each pagedVideos as video (video.id)}
+        {#each suggestedList as video (video.id)}
           <VideoCard {video} />
         {/each}
       </div>

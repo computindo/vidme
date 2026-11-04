@@ -16,6 +16,7 @@ pub fn create_router() -> Router<AppState> {
     Router::new()
         // Video Routes
         .route("/api/videos", get(videos::list_videos))
+        .route("/api/suggestions", get(videos::get_suggestions))
         .route(
             "/api/videos/:id",
             get(videos::get_video)

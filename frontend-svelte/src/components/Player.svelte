@@ -25,8 +25,7 @@
   let wasPlayingBeforeScrub = false;
   let lastTapLeft = 0;
   let lastTapRight = 0;
-  let tapTimerLeft = null;
-  let tapTimerRight = null;
+  let tapTimer = null;
   let skipFeedback = $state(null);
   let feedbackTimer = null;
 
@@ -89,36 +88,44 @@
     }
   }
 
-  function handleLeftTap(e) {
+  function handleLeftAreaClick(e) {
     e?.stopPropagation?.();
     const now = Date.now();
-    if (now - lastTapLeft < 300) {
-      clearTimeout(tapTimerLeft);
+    if (now - lastTapLeft < 320) {
+      clearTimeout(tapTimer);
+      lastTapLeft = 0;
       skipTime(-5);
       showSkipFeedback("-5s", "left");
-      lastTapLeft = 0;
     } else {
       lastTapLeft = now;
-      tapTimerLeft = setTimeout(() => {
+      clearTimeout(tapTimer);
+      tapTimer = setTimeout(() => {
         togglePlay();
-      }, 300);
+      }, 320);
     }
   }
 
-  function handleRightTap(e) {
+  function handleRightAreaClick(e) {
     e?.stopPropagation?.();
     const now = Date.now();
-    if (now - lastTapRight < 300) {
-      clearTimeout(tapTimerRight);
+    if (now - lastTapRight < 320) {
+      clearTimeout(tapTimer);
+      lastTapRight = 0;
       skipTime(5);
       showSkipFeedback("+5s", "right");
-      lastTapRight = 0;
     } else {
       lastTapRight = now;
-      tapTimerRight = setTimeout(() => {
+      clearTimeout(tapTimer);
+      tapTimer = setTimeout(() => {
         togglePlay();
-      }, 300);
+      }, 320);
     }
+  }
+
+  function handleCenterAreaClick(e) {
+    e?.stopPropagation?.();
+    clearTimeout(tapTimer);
+    togglePlay();
   }
 
   function showSkipFeedback(text, side) {
@@ -257,8 +264,7 @@
     window.removeEventListener("keydown", handleKeyDown);
     clearTimeout(holdTimer);
     clearTimeout(controlsTimeout);
-    clearTimeout(tapTimerLeft);
-    clearTimeout(tapTimerRight);
+    clearTimeout(tapTimer);
     clearTimeout(feedbackTimer);
   });
 </script>
@@ -312,18 +318,6 @@
       </div>
     {/if}
 
-    <!-- Double-tap seek zones on left & right (z-10) -->
-    <div
-      role="presentation"
-      class="absolute inset-y-0 left-0 w-1/4 z-10 cursor-pointer"
-      onclick={handleLeftTap}
-    ></div>
-    <div
-      role="presentation"
-      class="absolute inset-y-0 right-0 w-1/4 z-10 cursor-pointer"
-      onclick={handleRightTap}
-    ></div>
-
     <div
       class="absolute inset-0 flex flex-col justify-between bg-gradient-to-t from-black/80 via-transparent to-black/40 p-4 transition-opacity duration-300 {showControls || !isPlaying ? 'opacity-100 z-20 pointer-events-auto' : 'opacity-0 pointer-events-none'}"
     >
@@ -333,23 +327,55 @@
         </h1>
       </div>
 
-      <!-- Area tengah interaktif: klik untuk toggle play/pause dan tombol play saat pause -->
-      <div
-        role="button"
-        tabindex="0"
-        aria-label={isPlaying ? "Jeda video" : "Putar video"}
-        class="flex-1 w-full cursor-pointer flex items-center justify-center pointer-events-auto"
-        onclick={(e) => {
-          e.stopPropagation();
-          togglePlay();
-        }}
-        onkeydown={(e) => (e.key === " " || e.key === "Enter") && togglePlay()}
-      >
-        {#if !isPlaying}
-          <div class="flex h-16 w-16 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-transform hover:scale-110 shadow-lg">
-            <span class="material-symbols text-4xl">play_arrow</span>
-          </div>
-        {/if}
+      <!-- Area tengah interaktif: 3 kolom (Kiri 30% double-tap -5s, Tengah 40% play/pause, Kanan 30% double-tap +5s) -->
+      <div class="flex-1 w-full flex items-stretch pointer-events-auto">
+        <!-- Zona Kiri: Mundur 5s saat klik 2x -->
+        <div
+          role="button"
+          tabindex="0"
+          aria-label="Mundur 5 detik"
+          class="w-[30%] cursor-pointer flex items-center justify-start select-none"
+          onclick={handleLeftAreaClick}
+          ondblclick={(e) => {
+            e.stopPropagation();
+            clearTimeout(tapTimer);
+            skipTime(-5);
+            showSkipFeedback("-5s", "left");
+          }}
+          onkeydown={(e) => (e.key === " " || e.key === "Enter") && togglePlay()}
+        ></div>
+
+        <!-- Zona Tengah: Play/Pause -->
+        <div
+          role="button"
+          tabindex="0"
+          aria-label={isPlaying ? "Jeda video" : "Putar video"}
+          class="flex-1 cursor-pointer flex items-center justify-center select-none"
+          onclick={handleCenterAreaClick}
+          onkeydown={(e) => (e.key === " " || e.key === "Enter") && togglePlay()}
+        >
+          {#if !isPlaying}
+            <div class="flex h-16 w-16 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-transform hover:scale-110 shadow-lg">
+              <span class="material-symbols text-4xl">play_arrow</span>
+            </div>
+          {/if}
+        </div>
+
+        <!-- Zona Kanan: Maju 5s saat klik 2x -->
+        <div
+          role="button"
+          tabindex="0"
+          aria-label="Maju 5 detik"
+          class="w-[30%] cursor-pointer flex items-center justify-end select-none"
+          onclick={handleRightAreaClick}
+          ondblclick={(e) => {
+            e.stopPropagation();
+            clearTimeout(tapTimer);
+            skipTime(5);
+            showSkipFeedback("+5s", "right");
+          }}
+          onkeydown={(e) => (e.key === " " || e.key === "Enter") && togglePlay()}
+        ></div>
       </div>
 
       <div class="flex flex-col gap-2 pointer-events-auto">
@@ -433,32 +459,38 @@
         <input
           type="text"
           bind:value={editedTitle}
-          class="flex-1 rounded-lg border border-indigo-500 bg-theme-bg px-3 py-1.5 text-lg font-bold text-white focus:outline-none"
+          onkeydown={(e) => {
+            if (e.key === "Enter") saveTitle();
+            if (e.key === "Escape") isEditingTitle = false;
+          }}
+          onblur={saveTitle}
+          class="flex-1 rounded-lg border border-indigo-500 bg-theme-bg px-3 py-1.5 text-2xl font-bold text-white focus:outline-none"
+          autofocus
         />
         <button
           onclick={saveTitle}
-          class="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-indigo-500"
+          class="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500 cursor-pointer"
         >
           Simpan
         </button>
-        <button
-          onclick={() => (isEditingTitle = false)}
-          class="rounded-lg border border-theme-border px-3 py-1.5 text-sm font-semibold text-slate-300 hover:bg-theme-card"
-        >
-          Batal
-        </button>
       </div>
     {:else}
-      <div class="flex items-start justify-between gap-4">
-        <h1 class="text-2xl font-bold tracking-tight text-white md:text-3xl">
-          {video?.title || "Untitled Video"}
-        </h1>
+      <div class="flex items-center gap-2 group/title">
         <button
+          type="button"
           onclick={() => (isEditingTitle = true)}
-          class="flex items-center gap-1 rounded-lg border border-theme-border px-3 py-1 text-xs font-semibold text-slate-300 hover:bg-theme-card"
+          class="text-left text-2xl font-bold tracking-tight text-white md:text-3xl cursor-pointer hover:text-indigo-300 transition-colors"
+          title="Klik untuk ubah judul"
         >
-          <span class="material-symbols text-sm">edit</span>
-          <span>Edit Judul</span>
+          {video?.title || "Untitled Video"}
+        </button>
+        <button
+          type="button"
+          onclick={() => (isEditingTitle = true)}
+          class="rounded p-1 text-slate-500 hover:text-indigo-300 opacity-0 group-hover/title:opacity-100 transition-opacity cursor-pointer"
+          title="Ubah judul"
+        >
+          <span class="material-symbols text-lg">edit</span>
         </button>
       </div>
     {/if}

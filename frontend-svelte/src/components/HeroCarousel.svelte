@@ -92,17 +92,17 @@
   <div
     role="region"
     aria-label="Recent uploads carousel"
-    class="relative mx-auto my-6 w-full max-w-5xl px-4"
+    class="relative mx-auto my-4 w-full max-w-5xl px-0 sm:px-4"
     ontouchstart={handleTouchStart}
     ontouchend={handleTouchEnd}
   >
     <div
-      class="relative overflow-hidden rounded-2xl border border-theme-border bg-theme-surface shadow-2xl"
+      class="relative overflow-hidden rounded-xl sm:rounded-2xl border border-theme-border bg-theme-surface shadow-2xl"
       onmouseenter={handleMouseEnter}
       onmousemove={handleMouseMove}
       onmouseleave={handleMouseLeave}
     >
-      <div class="relative aspect-video w-full overflow-hidden bg-black">
+      <div class="relative aspect-[4/3] sm:aspect-video w-full overflow-hidden bg-black">
         {#each slides as slide, idx (slide.id)}
           <div
             class="absolute inset-0 transition-opacity duration-500 ease-in-out {idx === currentIndex ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'}"
@@ -114,13 +114,13 @@
                 loop
                 muted
                 playsinline
-                class="absolute inset-0 h-full w-full object-contain bg-black z-0"
+                class="absolute inset-0 h-full w-full object-cover bg-black z-0"
               ></video>
             {:else}
               <img
                 src={`/storyboard/${slide.id}`}
                 alt={slide.title}
-                class="h-full w-full object-contain"
+                class="h-full w-full object-cover"
                 onerror={(e) => (e.target.src = `/thumb/${slide.id}`)}
               />
             {/if}
@@ -128,7 +128,7 @@
             <div
               role="button"
               tabindex="0"
-              class="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/90 via-black/30 to-transparent p-6 text-white cursor-pointer z-10"
+              class="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/90 via-black/30 to-transparent p-4 sm:p-6 text-white cursor-pointer z-10"
               onclick={() => handleSlideClick(slide)}
               onkeydown={(e) => e.key === "Enter" && handleSlideClick(slide)}
             >
@@ -144,7 +144,7 @@
                   </span>
                 {/if}
               </div>
-              <h2 class="mt-2 text-xl font-bold tracking-tight text-white line-clamp-2 md:text-3xl">
+              <h2 class="mt-2 text-lg sm:text-2xl md:text-3xl font-bold tracking-tight text-white line-clamp-2">
                 {slide.title}
               </h2>
               <p class="mt-1 text-xs text-slate-300 md:text-sm">

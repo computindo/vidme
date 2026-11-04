@@ -5,10 +5,13 @@
 
   let { video } = $props();
 
+  const isSelected = $derived(appState.selectedIds.includes(video.id));
+
   let hoverTimer = null;
   let showVideoPreview = $state(false);
 
   function handleMouseEnter() {
+    if (appState.isSelectMode) return;
     clearTimeout(hoverTimer);
     hoverTimer = setTimeout(() => {
       if (video.has_microclip === 1) {
@@ -18,6 +21,7 @@
   }
 
   function handleMouseMove() {
+    if (appState.isSelectMode) return;
     const isTouch = typeof window !== "undefined" && (window.matchMedia("(hover: none)").matches || window.innerWidth < 1024);
     if (isTouch || showVideoPreview) return;
     clearTimeout(hoverTimer);
@@ -34,6 +38,10 @@
   }
 
   function handleCardClick() {
+    if (appState.isSelectMode) {
+      appState.toggleVideoSelection(video.id);
+      return;
+    }
     const isTouch = typeof window !== "undefined" && (window.matchMedia("(hover: none)").matches || window.innerWidth < 1024);
     if (isTouch) {
       if (!showVideoPreview && video.has_microclip === 1) {
@@ -46,7 +54,7 @@
 </script>
 
 <article
-  class="group relative flex flex-col overflow-hidden rounded-xl border border-theme-border bg-theme-surface transition-all duration-200 hover:-translate-y-1 hover:border-slate-700 hover:shadow-xl"
+  class="group relative flex flex-col overflow-hidden rounded-xl border transition-all duration-200 hover:-translate-y-1 hover:shadow-xl {isSelected ? 'border-indigo-500 ring-2 ring-indigo-500/80 bg-indigo-950/20' : 'border-theme-border bg-theme-surface hover:border-slate-700'}"
   onmouseenter={handleMouseEnter}
   onmousemove={handleMouseMove}
   onmouseleave={handleMouseLeave}
@@ -83,34 +91,50 @@
       </span>
     {/if}
 
-    <!-- Top Action Buttons on Thumbnail -->
-    <div
-      class="absolute right-2 top-2 z-20 flex items-center gap-1.5 transition-opacity duration-200 {video.is_pinned === 1 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}"
-    >
+    <!-- Selection Checkbox (Top Left) -->
+    {#if appState.isSelectMode}
       <button
         onclick={(e) => {
           e.stopPropagation();
-          pinVideo(video.id, video.is_pinned !== 1);
+          appState.toggleVideoSelection(video.id);
         }}
-        class="flex h-7 w-7 items-center justify-center rounded-full backdrop-blur-md transition-all shadow-md {video.is_pinned === 1 ? 'bg-indigo-600 text-white' : 'bg-black/60 text-slate-300 hover:text-white hover:bg-black/80'}"
-        title={video.is_pinned === 1 ? "Batalkan Pin" : "Sematkan Video"}
+        class="absolute left-2 top-2 z-20 flex h-6 w-6 items-center justify-center rounded-full border-2 transition-all shadow-md {isSelected ? 'bg-indigo-600 border-white text-white' : 'bg-black/60 border-slate-400 text-transparent hover:border-white'}"
+        title={isSelected ? "Batal pilih" : "Pilih video"}
       >
-        <span class="material-symbols text-sm">push_pin</span>
+        <span class="material-symbols text-sm font-bold {isSelected ? 'block' : 'hidden'}">check</span>
       </button>
+    {/if}
 
-      <button
-        onclick={(e) => {
-          e.stopPropagation();
-          if (confirm(`Hapus video "${video.title}"?`)) {
-            deleteVideo(video.id);
-          }
-        }}
-        class="flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-slate-300 backdrop-blur-md transition-all hover:bg-red-600 hover:text-white shadow-md opacity-0 group-hover:opacity-100"
-        title="Hapus Video"
+    <!-- Top Action Buttons on Thumbnail (Hidden in Select Mode) -->
+    {#if !appState.isSelectMode}
+      <div
+        class="absolute right-2 top-2 z-20 flex items-center gap-1.5 transition-opacity duration-200 {video.is_pinned === 1 ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}"
       >
-        <span class="material-symbols text-sm">delete</span>
-      </button>
-    </div>
+        <button
+          onclick={(e) => {
+            e.stopPropagation();
+            pinVideo(video.id, video.is_pinned !== 1);
+          }}
+          class="flex h-7 w-7 items-center justify-center rounded-full backdrop-blur-md transition-all shadow-md {video.is_pinned === 1 ? 'bg-indigo-600 text-white' : 'bg-black/60 text-slate-300 hover:text-white hover:bg-black/80'}"
+          title={video.is_pinned === 1 ? "Batalkan Pin" : "Sematkan Video"}
+        >
+          <span class="material-symbols text-sm">push_pin</span>
+        </button>
+
+        <button
+          onclick={(e) => {
+            e.stopPropagation();
+            if (confirm(`Hapus video "${video.title}"?`)) {
+              deleteVideo(video.id);
+            }
+          }}
+          class="flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-slate-300 backdrop-blur-md transition-all hover:bg-red-600 hover:text-white shadow-md opacity-0 group-hover:opacity-100"
+          title="Hapus Video"
+        >
+          <span class="material-symbols text-sm">delete</span>
+        </button>
+      </div>
+    {/if}
   </div>
 
   <div class="flex flex-1 flex-col justify-between p-3">
