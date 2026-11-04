@@ -374,17 +374,111 @@ async fn handle_put(
 }
 
 async fn handle_get(inbox_dir: &str, sub_path: &str) -> Response {
-    let target = PathBuf::from(inbox_dir).join(sub_path);
-    if let Ok(file) = File::open(&target).await {
-        let stream = ReaderStream::new(file);
-        Response::builder()
-            .status(StatusCode::OK)
-            .body(Body::from_stream(stream))
-            .unwrap()
+    // Directory listing for root/subdir: JSON + text lines listing all folders/files
+    // so browser (GET) can browse the inbox without PROPFIND.
+    let is_root_or_dir = if sub_path.is_empty() {
+        true
     } else {
-        Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .body(Body::empty())
-            .unwrap()
+        let p = PathBuf::from(inbox_dir).join(sub_path);
+        p.is_dir()
+    };
+
+    if is_root_or_dir {
+        let target = if sub_path.is_empty() {
+            PathBuf::from(inbox_dir)
+        } else {
+            PathBuf::from(inbox_dir).join(sub_path)
+        };
+
+        match fs::read_dir(&target).await {
+            Ok(mut entries) => {
+                let mut folders = Vec::new();
+                let mut files = Vec::new();
+                let mut json_folders = Vec::new();
+                let mut json_files = Vec::new();
+
+                while let Ok(Some(entry)) = entries.next_entry().await {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if name.starts_with('.') || name.ends_with(".folderid") {
+                        continue;
+                    }
+                    if let Ok(meta) = entry.metadata().await {
+                        if let Ok(ft) = entry.file_type().await {
+                            if ft.is_dir() {
+                                folders.push(name.clone());
+                                json_folders.push(serde_json::json!({
+                                    "name": name,
+                                    "type": "folder",
+                                    "size": 0
+                                }));
+                            } else if ft.is_file() {
+                                let size = meta.len();
+                                files.push(name.clone());
+                                json_files.push(serde_json::json!({
+                                    "name": name,
+                                    "type": "file",
+                                    "size": size
+                                }));
+                            }
+                        }
+                    }
+                }
+
+                folders.sort();
+                files.sort();
+
+                // JSON response (primary)
+                let payload = serde_json::json!({
+                    "path": if sub_path.is_empty() { "/webdav/".to_string() } else { format!("/webdav/{}/", sub_path) },
+                    "folders": json_folders,
+                    "files": json_files,
+                    "count": folders.len() + files.len()
+                });
+                let json_str = payload.to_string();
+
+                // Plain text listing (secondary, for Curl -H Accept text/plain or browser simplicity)
+                let mut text = format!("WebDAV root: {}\n\n", if sub_path.is_empty() { "/webdav/" } else { &format!("/webdav/{}/", sub_path) });
+                if !folders.is_empty() {
+                    text.push_str("Folders:\n");
+                    for f in &folders {
+                        text.push_str(&format!("  {}/\n", f));
+                    }
+                }
+                if !files.is_empty() {
+                    text.push_str("\nFiles:\n");
+                    for f in &files {
+                        // size not in text (keep simple) - JSON carries it
+                        text.push_str(&format!("  {}\n", f));
+                    }
+                }
+                if folders.is_empty() && files.is_empty() {
+                    text.push_str("(empty)\n");
+                }
+
+                Response::builder()
+                    .status(StatusCode::OK)
+                    .header(header::CONTENT_TYPE, "application/json; charset=utf-8")
+                    .body(Body::from(json_str))
+                    .unwrap()
+            }
+            Err(_) => Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body(Body::from("Not Found"))
+                .unwrap(),
+        }
+    } else {
+        let target = PathBuf::from(inbox_dir).join(sub_path);
+        if let Ok(file) = File::open(&target).await {
+            let stream = ReaderStream::new(file);
+            Response::builder()
+                .status(StatusCode::OK)
+                .body(Body::from_stream(stream))
+                .unwrap()
+        } else {
+            Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body(Body::empty())
+                .unwrap()
+        }
     }
 }

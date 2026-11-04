@@ -54,5 +54,6 @@ pub fn create_router() -> Router<AppState> {
         )
         // WebDAV Handler
         .route("/webdav", axum::routing::any(webdav::webdav_handler))
+        .route("/webdav/", axum::routing::any(webdav::webdav_handler))
         .route("/webdav/*path", axum::routing::any(webdav::webdav_handler))
 }
