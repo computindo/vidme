@@ -132,18 +132,6 @@
               onclick={() => handleSlideClick(slide)}
               onkeydown={(e) => e.key === "Enter" && handleSlideClick(slide)}
             >
-              <div class="flex items-center gap-2">
-                <span class="inline-flex items-center gap-1.5 self-start rounded-full bg-indigo-600/90 px-3 py-1 text-xs font-semibold uppercase tracking-wider backdrop-blur-md">
-                  <span class="material-symbols text-sm">auto_awesome</span>
-                  Terbaru
-                </span>
-                {#if previewVideoId === slide.id}
-                  <span class="inline-flex items-center gap-1 self-start rounded-full bg-emerald-500/90 px-2.5 py-1 text-xs font-semibold tracking-wider text-white backdrop-blur-md animate-pulse">
-                    <span class="material-symbols text-xs">play_arrow</span>
-                    Preview
-                  </span>
-                {/if}
-              </div>
               <h2 class="mt-2 text-lg sm:text-2xl md:text-3xl font-bold tracking-tight text-white line-clamp-2">
                 {slide.title}
               </h2>

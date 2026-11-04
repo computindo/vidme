@@ -27,6 +27,7 @@ pub fn spawn_inbox_watcher(
 
         loop {
             sleep(Duration::from_secs(3)).await;
+            gc_orphan_uploading(&inbox_path).await;
             if let Ok(entries) = scan_inbox_recursive(&inbox_path).await {
                 for file_path in entries {
                     if let Err(e) = process_inbox_file(
@@ -52,6 +53,36 @@ fn is_video_file(path: &Path) -> bool {
         VIDEO_EXTENSIONS.contains(&dot_ext.as_str())
     } else {
         false
+    }
+}
+
+async fn gc_orphan_uploading(root: &str) {
+    let mut dirs_to_visit = vec![PathBuf::from(root)];
+    while let Some(current_dir) = dirs_to_visit.pop() {
+        if let Ok(mut read_dir) = fs::read_dir(&current_dir).await {
+            while let Ok(Some(entry)) = read_dir.next_entry().await {
+                let file_name = entry.file_name().to_string_lossy().to_string();
+                let path = entry.path();
+                if let Ok(meta) = entry.metadata().await {
+                    if meta.is_dir() {
+                        dirs_to_visit.push(path);
+                    } else if meta.is_file()
+                        && file_name.starts_with('.')
+                        && file_name.ends_with(".uploading")
+                    {
+                        if let Ok(modified) = meta.modified() {
+                            if let Ok(elapsed) = modified.elapsed() {
+                                if elapsed.as_secs() > 86400 {
+                                    if fs::remove_file(&path).await.is_ok() {
+                                        tracing::info!("Removed orphaned .uploading file: {}", path.display());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

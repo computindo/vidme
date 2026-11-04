@@ -1,5 +1,6 @@
 use axum::{
     body::Body,
+    extract::DefaultBodyLimit,
     http::{header, StatusCode, Uri},
     response::Response,
     routing::get,
@@ -134,6 +135,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .nest_service("/js", ServeDir::new(format!("{}/js", frontend_dir)))
         .fallback(move |uri| spa_fallback(f2, uri))
         .layer(CorsLayer::permissive())
+        .layer(DefaultBodyLimit::disable())
         .with_state(state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));

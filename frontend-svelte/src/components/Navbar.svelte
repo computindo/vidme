@@ -26,7 +26,7 @@
         id="sidebarRevealBtn"
         onclick={() => appState.toggleSidebar()}
         title="Open sidebar"
-        class="flex h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-[#10182b] px-2.5 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
+        class="hidden lg:flex h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-700 bg-[#10182b] px-2.5 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
       >
         <span class="material-symbols text-xl">left_panel_open</span>
       </button>
@@ -77,14 +77,6 @@
     >
       <span class="material-symbols text-base">checklist</span>
       <span class="hidden sm:inline">Select</span>
-    </button>
-
-    <button
-      class="flex h-10 w-10 items-center justify-center rounded-lg text-theme-muted hover:bg-theme-card hover:text-white md:hidden"
-      onclick={() => appState.toggleMobileSearch()}
-      aria-label="Toggle Search"
-    >
-      <span class="material-symbols">{appState.mobileSearchOpen ? "close" : "search"}</span>
     </button>
 
     <!-- Upload Button: Desktop only (hidden on mobile to prevent duplicate with BottomNav) -->

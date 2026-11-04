@@ -11,7 +11,14 @@ use tokio::fs::{self, File};
 use tokio::io::AsyncWriteExt;
 use tokio_util::io::ReaderStream;
 use uuid::Uuid;
-use crate::{db, state::AppState};
+use crate::{db, media::probe, state::AppState};
+
+fn unsupported_media(msg: &str) -> Response {
+    Response::builder()
+        .status(StatusCode::UNSUPPORTED_MEDIA_TYPE)
+        .body(Body::from(msg.to_string()))
+        .unwrap()
+}
 
 fn esc_xml(s: &str) -> String {
     s.replace('&', "&amp;")
@@ -267,25 +274,23 @@ async fn handle_put(
     }
 
     let target_path = PathBuf::from(inbox_dir).join(sub_path);
+    // Write to hidden tmp file `.<basename>.uploading` in the SAME directory as
+    // target, so the watcher skip (`starts_with('.')`) ignores it while streaming.
+    let basename = target_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("upload")
+        .to_string();
+    let parent_dir = target_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| PathBuf::from(inbox_dir));
     if let Some(parent) = target_path.parent() {
         let _ = fs::create_dir_all(parent).await;
-
-        // Attribute folder if upload is inside a subfolder
-        if let Some(parent_name) = parent.file_name().and_then(|n| n.to_str()) {
-            if parent_name != "webdav-inbox" && !parent_name.is_empty() {
-                if let Ok(Some(row)) = sqlx::query_as::<_, (String,)>("SELECT id FROM folders WHERE name = ?")
-                    .bind(parent_name)
-                    .fetch_optional(&state.pool)
-                    .await
-                {
-                    let sidecar = format!("{}.folderid", target_path.display());
-                    let _ = fs::write(&sidecar, row.0).await;
-                }
-            }
-        }
     }
+    let tmp_path = parent_dir.join(format!(".{}.uploading", basename));
 
-    let mut file = match File::create(&target_path).await {
+    let mut file = match File::create(&tmp_path).await {
         Ok(f) => f,
         Err(e) => {
             return Response::builder()
@@ -300,7 +305,8 @@ async fn handle_put(
         match chunk_res {
             Ok(chunk) => {
                 if let Err(e) = file.write_all(&chunk).await {
-                    let _ = fs::remove_file(&target_path).await;
+                    drop(file);
+                    let _ = fs::remove_file(&tmp_path).await;
                     return Response::builder()
                         .status(StatusCode::INTERNAL_SERVER_ERROR)
                         .body(Body::from(e.to_string()))
@@ -308,7 +314,8 @@ async fn handle_put(
                 }
             }
             Err(e) => {
-                let _ = fs::remove_file(&target_path).await;
+                drop(file);
+                let _ = fs::remove_file(&tmp_path).await;
                 return Response::builder()
                     .status(StatusCode::BAD_REQUEST)
                     .body(Body::from(e.to_string()))
@@ -318,6 +325,47 @@ async fn handle_put(
     }
 
     let _ = file.flush().await;
+    drop(file);
+
+    // Probe tmp file; invalid video or disallowed codec -> delete tmp, 415
+    let tmp_str = tmp_path.to_string_lossy().to_string();
+    match probe::probe_video(&tmp_str).await {
+        Ok(meta) => {
+            let codec = meta.codec.as_deref().unwrap_or("unknown").to_string();
+            if !probe::is_codec_allowed(&codec) {
+                let _ = fs::remove_file(&tmp_path).await;
+                return unsupported_media(&format!("Only H.264 video is accepted (got: {})", codec));
+            }
+        }
+        Err(e) => {
+            let _ = fs::remove_file(&tmp_path).await;
+            return unsupported_media(&format!("Invalid video file: {}", e));
+        }
+    }
+
+    // Sidecar write after successful probe, targeting final path
+    if let Some(parent) = target_path.parent() {
+        if let Some(parent_name) = parent.file_name().and_then(|n| n.to_str()) {
+            if parent_name != "webdav-inbox" && !parent_name.is_empty() {
+                if let Ok(Some(row)) = sqlx::query_as::<_, (String,)>("SELECT id FROM folders WHERE name = ?")
+                    .bind(parent_name)
+                    .fetch_optional(&state.pool)
+                    .await
+                {
+                    let sidecar = format!("{}.folderid", target_path.display());
+                    let _ = fs::write(&sidecar, row.0).await;
+                }
+            }
+        }
+    }
+
+    if let Err(e) = fs::rename(&tmp_path, &target_path).await {
+        let _ = fs::remove_file(&tmp_path).await;
+        return Response::builder()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .body(Body::from(e.to_string()))
+            .unwrap();
+    }
 
     Response::builder()
         .status(StatusCode::CREATED)

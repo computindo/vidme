@@ -24,6 +24,7 @@
       });
     }
     processQueue();
+    if (fileInput) fileInput.value = '';
   }
 
   function cancelUpload(item) {
@@ -51,6 +52,15 @@
           nextItem.progress = prog.progress;
           nextItem.speed = prog.speed;
           nextItem.eta = prog.eta;
+          let entry = appState.activeUploads.find((u) => u.id === nextItem.id);
+          if (!entry) {
+            entry = { id: nextItem.id, title: nextItem.name, progress: prog.progress, speed: prog.speed, eta: prog.eta };
+            appState.activeUploads = [...appState.activeUploads, entry];
+          } else {
+            entry.progress = prog.progress;
+            entry.speed = prog.speed;
+            entry.eta = prog.eta;
+          }
         },
         nextItem.controller.signal
       );
@@ -65,6 +75,7 @@
         appState.addToast(`Gagal: ${err.message}`, 'error');
       }
     } finally {
+      appState.activeUploads = appState.activeUploads.filter((u) => u.id !== nextItem.id);
       isUploading = false;
       currentUpload = null;
       processQueue();
