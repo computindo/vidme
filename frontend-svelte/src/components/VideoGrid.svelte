@@ -26,7 +26,9 @@
 
   function setPage(p) {
     if (p < 1 || p > totalPages) return;
-    appState.navigate(`/?page=${p}`);
+    const basePath = (typeof window !== "undefined" ? window.location.pathname : "/").replace(/\/$/, "") || "/";
+    const target = basePath === "/" ? `/?page=${p}` : `${basePath}?page=${p}`;
+    appState.navigate(target);
     if (typeof window !== "undefined") {
       requestAnimationFrame(() => window.scrollTo(0, 0));
     }
@@ -83,6 +85,8 @@
           Hasil Pencarian "{appState.searchQuery}" ({appState.filteredVideos.length})
         {:else if appState.virtualView}
           Koleksi {appState.virtualView.toUpperCase()} ({appState.filteredVideos.length})
+        {:else if appState.activeFolder}
+          {appState.activeFolder.name} ({appState.filteredVideos.length})
         {:else if appState.activeFolderId}
           Folder Video ({appState.filteredVideos.length})
         {:else}

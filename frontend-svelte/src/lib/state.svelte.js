@@ -1,3 +1,5 @@
+import { slugify } from "./utils.js";
+
 class GlobalState {
   videos = $state([]);
   folders = $state([]);
@@ -29,6 +31,11 @@ class GlobalState {
   // Derived: Active video object
   activeVideo = $derived(
     this.activeVideoId ? this.videos.find((v) => v.id === this.activeVideoId) || null : null
+  );
+
+  // Derived: Active folder object
+  activeFolder = $derived(
+    this.activeFolderId ? this.folders.find((f) => f.id === this.activeFolderId) || null : null
   );
 
   // Derived: Filtered videos based on folder / virtual / search
@@ -169,7 +176,7 @@ class GlobalState {
     // Check folder by slug
     const folderSlug = path.replace(/^\/|\/$/g, "");
     if (folderSlug && folderSlug !== "index.html" && folderSlug !== "player.html") {
-      const found = this.folders.find((f) => f.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") === folderSlug);
+      const found = this.folders.find((f) => slugify(f.name) === folderSlug);
       if (found) {
         this.activeFolderId = found.id;
         return;

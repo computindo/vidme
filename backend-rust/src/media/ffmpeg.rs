@@ -155,7 +155,7 @@ pub async fn generate_microclip(
     }
 
     let plan = clip_plan(dur);
-    let tmp = format!("{}.tmp.webm", out);
+    let tmp = format!("{}.tmp.mp4", out);
     let vf = vf_for(is_portrait);
 
     let positions: Vec<f64> = plan
@@ -207,21 +207,17 @@ pub async fn generate_microclip(
     args.push("[v]".into());
     args.push("-an".into());
     args.push("-c:v".into());
-    args.push("libsvtav1".into());
+    args.push("libx264".into());
     args.push("-preset".into());
-    args.push("8".into());
+    args.push("veryfast".into());
     args.push("-crf".into());
-    args.push("32".into());
+    args.push("28".into());
     args.push("-r".into());
     args.push("20".into());
-    args.push("-colorspace".into());
-    args.push("bt709".into());
-    args.push("-color_primaries".into());
-    args.push("bt709".into());
-    args.push("-color_trc".into());
-    args.push("bt709".into());
-    args.push("-color_range".into());
-    args.push("tv".into());
+    args.push("-pix_fmt".into());
+    args.push("yuv420p".into());
+    args.push("-movflags".into());
+    args.push("+faststart".into());
     args.push(tmp.clone());
 
     let output_res = Command::new("ffmpeg")

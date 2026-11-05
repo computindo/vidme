@@ -22,6 +22,7 @@
     appState.parseCurrentUrl();
     window.addEventListener('popstate', handlePopState);
     await Promise.all([fetchVideos(), fetchFolders(), fetchSuggestions()]);
+    appState.parseCurrentUrl();
     sseSource = initSSE();
   });
 

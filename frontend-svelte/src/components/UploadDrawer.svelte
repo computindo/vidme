@@ -12,10 +12,12 @@
   function handleFileSelect(files) {
     if (!files || files.length === 0) return;
     for (const f of Array.from(files)) {
+      const cleanName = f.name.replace(/\.[^.]+$/, '');
       uploadQueue.push({
         id: Math.random().toString(36).slice(2),
         file: f,
         name: f.name,
+        title: cleanName,
         size: f.size,
         progress: 0,
         status: 'queued',
@@ -54,18 +56,20 @@
           nextItem.eta = prog.eta;
           let entry = appState.activeUploads.find((u) => u.id === nextItem.id);
           if (!entry) {
-            entry = { id: nextItem.id, title: nextItem.name, progress: prog.progress, speed: prog.speed, eta: prog.eta };
+            entry = { id: nextItem.id, title: nextItem.title || nextItem.name, progress: prog.progress, speed: prog.speed, eta: prog.eta };
             appState.activeUploads = [...appState.activeUploads, entry];
           } else {
+            entry.title = nextItem.title || nextItem.name;
             entry.progress = prog.progress;
             entry.speed = prog.speed;
             entry.eta = prog.eta;
           }
         },
-        nextItem.controller.signal
+        nextItem.controller.signal,
+        nextItem.title
       );
       nextItem.status = 'done';
-      appState.addToast(`Upload selesai: ${nextItem.name}`, 'success');
+      appState.addToast(`Upload selesai: ${nextItem.title || nextItem.name}`, 'success');
     } catch (err) {
       if (nextItem.controller.signal.aborted) {
         nextItem.status = 'cancelled';
@@ -129,7 +133,6 @@
         <input
           bind:this={fileInput}
           type="file"
-          accept="video/*"
           multiple
           class="hidden"
           onchange={(e) => handleFileSelect(e.target.files)}
@@ -144,17 +147,29 @@
           {#each uploadQueue as item (item.id)}
             <div class="rounded-lg border border-theme-border bg-theme-card p-3">
               <div class="flex items-center justify-between text-xs">
-                <span class="font-semibold text-slate-200 line-clamp-1">{item.name}</span>
-                <div class="flex items-center gap-2">
-                  <span class="text-theme-muted">{formatBytes(item.size)}</span>
-                  <button
-                    onclick={() => cancelUpload(item)}
-                    class="flex h-5 w-5 items-center justify-center rounded text-theme-muted hover:bg-theme-border hover:text-white"
-                    title="Batalkan"
-                  >
-                    <span class="material-symbols text-sm">close</span>
-                  </button>
-                </div>
+                {#if item.status === 'queued'}
+                  <div class="mr-2 flex flex-1 flex-col gap-1">
+                    <input
+                      type="text"
+                      bind:value={item.title}
+                      placeholder="Judul video"
+                      class="w-full rounded border border-theme-border bg-theme-bg px-2 py-1 text-xs text-white outline-none focus:border-indigo-500"
+                    />
+                    <span class="text-[10px] text-theme-muted truncate">{item.name} &bull; {formatBytes(item.size)}</span>
+                  </div>
+                {:else}
+                  <span class="font-semibold text-slate-200 line-clamp-1">{item.title || item.name}</span>
+                  <div class="flex items-center gap-2">
+                    <span class="text-theme-muted">{formatBytes(item.size)}</span>
+                  </div>
+                {/if}
+                <button
+                  onclick={() => cancelUpload(item)}
+                  class="flex h-5 w-5 shrink-0 items-center justify-center rounded text-theme-muted hover:bg-theme-border hover:text-white"
+                  title="Batalkan"
+                >
+                  <span class="material-symbols text-sm">close</span>
+                </button>
               </div>
 
               {#if item.status === 'uploading'}

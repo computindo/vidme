@@ -110,14 +110,16 @@ pub async fn delete_video(
     let transcoded = format!("{}/transcoded/{}.mp4", storage, id);
     let thumb = format!("{}/thumbnails/{}.jpg", storage, id);
     let storyboard = format!("{}/thumbnails/{}.storyboard.jpg", storage, id);
-    let clip = format!("{}/thumbnails/{}.clip.webm", storage, id);
+    let clip_webm = format!("{}/thumbnails/{}.clip.webm", storage, id);
+    let clip_mp4 = format!("{}/thumbnails/{}.clip.mp4", storage, id);
     let staging = format!("{}/staging/{}.mp4", storage, id);
     let orig = format!("{}/original/{}", storage, v.filename);
 
     let _ = tokio::fs::remove_file(transcoded).await;
     let _ = tokio::fs::remove_file(thumb).await;
     let _ = tokio::fs::remove_file(storyboard).await;
-    let _ = tokio::fs::remove_file(clip).await;
+    let _ = tokio::fs::remove_file(clip_webm).await;
+    let _ = tokio::fs::remove_file(clip_mp4).await;
     let _ = tokio::fs::remove_file(staging).await;
     let _ = tokio::fs::remove_file(orig).await;
 

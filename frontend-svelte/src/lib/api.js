@@ -19,6 +19,7 @@ export async function fetchFolders() {
     const res = await fetch('/api/folders');
     if (res.ok) {
       appState.folders = await res.json();
+      appState.parseCurrentUrl();
     }
   } catch (err) {
     console.error('Failed to fetch folders:', err);

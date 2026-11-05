@@ -46,7 +46,7 @@ async fn process_single_video(
     let transcoded_path = format!("{}/{}.mp4", transcoded_dir, video_id);
     let thumb_path = format!("{}/{}.jpg", thumbnails_dir, video_id);
     let storyboard_path = format!("{}/{}.storyboard.jpg", thumbnails_dir, video_id);
-    let clip_path = format!("{}/{}.clip.webm", thumbnails_dir, video_id);
+    let clip_path = format!("{}/{}.clip.mp4", thumbnails_dir, video_id);
 
     // 1. Probe staging video
     let meta = match probe::probe_video(staging_path).await {

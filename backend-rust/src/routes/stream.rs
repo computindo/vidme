@@ -134,10 +134,18 @@ pub async fn get_clip(
     Path(id): Path<String>,
 ) -> Result<Response, (StatusCode, String)> {
     let thumb_dir = format!("{}/thumbnails", state.config.storage_path);
-    let path = safe_path(&thumb_dir, &format!("{}.clip.webm", id))
-        .ok_or((StatusCode::BAD_REQUEST, "Invalid path".to_string()))?;
+    if let Some(mp4_path) = safe_path(&thumb_dir, &format!("{}.clip.mp4", id)) {
+        if mp4_path.exists() {
+            return serve_static_file(&mp4_path, "video/mp4").await;
+        }
+    }
+    if let Some(webm_path) = safe_path(&thumb_dir, &format!("{}.clip.webm", id)) {
+        if webm_path.exists() {
+            return serve_static_file(&webm_path, "video/webm").await;
+        }
+    }
 
-    serve_static_file(&path, "video/webm").await
+    Err((StatusCode::NOT_FOUND, "Clip not found".to_string()))
 }
 
 async fn serve_static_file(path: &StdPath, content_type: &str) -> Result<Response, (StatusCode, String)> {

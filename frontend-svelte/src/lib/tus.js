@@ -103,7 +103,7 @@ const TUS_CHUNK_SIZE_LARGE = 8 * 1024 * 1024; // 8MB high-speed
 const TUS_SPEED_UP_MBPS = 1.0;                // speed > 1.0 MB/s -> switch to 8MB
 const TUS_SPEED_DOWN_MBPS = 0.9;              // speed < 0.9 MB/s -> fall back to 4MB
 
-export async function uploadTusFile(file, folderId, onProgress, signal) {
+export async function uploadTusFile(file, folderId, onProgress, signal, customTitle = null) {
   let chunkSize = TUS_CHUNK_SIZE_SMALL;
 
   function syncChunkSize(speed) {
@@ -119,7 +119,8 @@ export async function uploadTusFile(file, folderId, onProgress, signal) {
     throw new Error(`Hanya video H.264 yang diperbolehkan. Codec terdeteksi: ${_gate.codec}. Silakan convert terlebih dahulu.`);
   }
 
-  const b64Title = btoa(unescape(encodeURIComponent(file.name.replace(/\.[^.]+$/, ''))));
+  const rawTitle = customTitle && customTitle.trim() ? customTitle.trim() : file.name.replace(/\.[^.]+$/, '');
+  const b64Title = btoa(unescape(encodeURIComponent(rawTitle)));
   const b64Filename = btoa(unescape(encodeURIComponent(file.name)));
   let meta = `title ${b64Title},filename ${b64Filename}`;
   if (folderId) {
