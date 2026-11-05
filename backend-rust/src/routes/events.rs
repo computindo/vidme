@@ -1,19 +1,20 @@
 use axum::{
     extract::State,
-    http::header,
-    response::{
-        sse::{Event, KeepAlive, Sse},
-        IntoResponse, Response,
-    },
+    http::{header, HeaderName, HeaderValue},
+    response::sse::{Event, KeepAlive, Sse},
 };
-use std::time::Duration;
+use futures_util::stream::Stream;
+use std::{convert::Infallible, time::Duration};
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt;
 use crate::state::AppState;
 
 pub async fn sse_handler(
     State(state): State<AppState>,
-) -> Response {
+) -> (
+    [(HeaderName, HeaderValue); 2],
+    Sse<impl Stream<Item = Result<Event, Infallible>>>,
+) {
     let rx = state.sse_tx.subscribe();
     let stream = BroadcastStream::new(rx).filter_map(|msg| match msg {
         Ok(data) => Some(Ok(Event::default().data(data))),
@@ -26,14 +27,10 @@ pub async fn sse_handler(
             .text("ka"),
     );
 
-    let mut resp = sse.into_response();
-    resp.headers_mut().insert(
-        header::HeaderName::from_static("x-accel-buffering"),
-        header::HeaderValue::from_static("no"),
-    );
-    resp.headers_mut().insert(
-        header::CACHE_CONTROL,
-        header::HeaderValue::from_static("no-cache, no-transform"),
-    );
-    resp
+    let headers = [
+        (header::CACHE_CONTROL, HeaderValue::from_static("no-cache, no-transform")),
+        (HeaderName::from_static("x-accel-buffering"), HeaderValue::from_static("no")),
+    ];
+
+    (headers, sse)
 }
