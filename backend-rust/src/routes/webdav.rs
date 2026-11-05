@@ -437,7 +437,8 @@ async fn handle_get(inbox_dir: &str, sub_path: &str) -> Response {
                 let json_str = payload.to_string();
 
                 // Plain text listing (secondary, for Curl -H Accept text/plain or browser simplicity)
-                let mut text = format!("WebDAV root: {}\n\n", if sub_path.is_empty() { "/webdav/" } else { &format!("/webdav/{}/", sub_path) });
+                let root_label = if sub_path.is_empty() { "/webdav/".to_string() } else { format!("/webdav/{}/", sub_path) };
+                let mut text = format!("WebDAV root: {}\n\n", root_label);
                 if !folders.is_empty() {
                     text.push_str("Folders:\n");
                     for f in &folders {
