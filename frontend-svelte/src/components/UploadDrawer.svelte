@@ -2,6 +2,7 @@
   import { appState } from '../lib/state.svelte.js';
   import { uploadTusFile } from '../lib/tus.js';
   import { fmt, formatBytes } from '../lib/utils.js';
+  import { fetchVideos } from '../lib/api.js';
 
   let fileInput = $state(null);
   let isDragging = $state(false);
@@ -70,6 +71,7 @@
       );
       nextItem.status = 'done';
       appState.addToast(`Upload selesai: ${nextItem.title || nextItem.name}`, 'success');
+      fetchVideos();
     } catch (err) {
       if (nextItem.controller.signal.aborted) {
         nextItem.status = 'cancelled';

@@ -18,9 +18,18 @@
     appState.parseCurrentUrl();
   }
 
+  function handleVisibilityChange() {
+    if (typeof document !== 'undefined' && !document.hidden) {
+      fetchVideos();
+    }
+  }
+
   onMount(async () => {
     appState.parseCurrentUrl();
     window.addEventListener('popstate', handlePopState);
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
     await Promise.all([fetchVideos(), fetchFolders(), fetchSuggestions()]);
     appState.parseCurrentUrl();
     sseSource = initSSE();
@@ -28,6 +37,9 @@
 
   onDestroy(() => {
     window.removeEventListener('popstate', handlePopState);
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }
     if (sseSource) sseSource.close();
   });
 </script>

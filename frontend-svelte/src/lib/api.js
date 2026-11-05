@@ -78,9 +78,11 @@ export async function updateVideoTitle(id, title) {
 export function updateVideoInState(video) {
   const idx = appState.videos.findIndex((v) => v.id === video.id);
   if (idx !== -1) {
-    appState.videos[idx] = { ...appState.videos[idx], ...video };
+    const copy = [...appState.videos];
+    copy[idx] = { ...copy[idx], ...video };
+    appState.videos = copy;
   } else {
-    appState.videos.unshift(video);
+    appState.videos = [video, ...appState.videos];
   }
 }
 
