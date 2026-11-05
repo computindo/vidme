@@ -134,13 +134,17 @@ pub async fn delete_video(
     });
     let _ = state.sse_tx.send(sse_msg_legacy.to_string());
 
+    state.suggestions.on_video_deleted(&id).await;
+
     Ok(Json(serde_json::json!({ "success": true })))
 }
 
 pub async fn get_suggestions(
     State(state): State<AppState>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    let list = videos::get_suggestions(&state.pool, 15)
+    let list = state
+        .suggestions
+        .get_suggestions(&state.pool)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(list))

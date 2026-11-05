@@ -108,6 +108,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         pool.clone(),
         state.config.clone(),
         state.sse_tx.clone(),
+        state.suggestions.clone(),
         worker_rx,
     );
 

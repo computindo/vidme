@@ -1,14 +1,17 @@
 <script>
+  import { onDestroy } from 'svelte';
   import { appState } from '../lib/state.svelte.js';
   import { uploadTusFile } from '../lib/tus.js';
-  import { fmt, formatBytes } from '../lib/utils.js';
+  import { formatBytes, fmtEta } from '../lib/utils.js';
   import { fetchVideos } from '../lib/api.js';
 
   let fileInput = $state(null);
   let isDragging = $state(false);
   let isUploading = $state(false);
-  let currentUpload = $state(null);
   let uploadQueue = $state([]);
+  let interpolationTimer = null;
+
+  const stagedCount = $derived(uploadQueue.filter((q) => q.status === 'staged').length);
 
   function handleFileSelect(files) {
     if (!files || files.length === 0) return;
@@ -19,14 +22,23 @@
         file: f,
         name: f.name,
         title: cleanName,
+        folderId: appState.activeFolderId || '',
         size: f.size,
         progress: 0,
-        status: 'queued',
+        bytesSent: 0,
+        bytesTotal: f.size,
+        displaySent: 0,
+        displayProgress: 0,
+        speed: 0,
+        eta: 0,
+        displayEta: 0,
+        anchorSent: 0,
+        anchorAt: Date.now(),
+        status: 'staged',
         error: null,
         controller: new AbortController(),
       });
     }
-    processQueue();
     if (fileInput) fileInput.value = '';
   }
 
@@ -36,28 +48,93 @@
     }
     item.status = 'cancelled';
     uploadQueue = uploadQueue.filter((q) => q.id !== item.id);
+    if (!uploadQueue.some((q) => q.status === 'uploading' || q.status === 'queued')) {
+      stopInterpolationTimer();
+    }
   }
+
+  function startUploadAll() {
+    let hasStaged = false;
+    for (const item of uploadQueue) {
+      if (item.status === 'staged') {
+        item.status = 'queued';
+        hasStaged = true;
+      }
+    }
+    if (hasStaged) {
+      startInterpolationTimer();
+      processQueue();
+    }
+  }
+
+  function startInterpolationTimer() {
+    if (interpolationTimer) return;
+    interpolationTimer = setInterval(() => {
+      const active = uploadQueue.find((u) => u.status === 'uploading');
+      if (!active) {
+        if (!isUploading) stopInterpolationTimer();
+        return;
+      }
+      if (active.speed > 0 && active.bytesTotal > 0) {
+        const dt = (Date.now() - active.anchorAt) / 1000;
+        const interpolated = Math.min(active.bytesTotal, active.anchorSent + active.speed * dt);
+        active.displaySent = interpolated;
+        active.displayProgress = Math.round((interpolated / active.bytesTotal) * 100);
+        active.displayEta = Math.max(0, Math.round((active.bytesTotal - interpolated) / active.speed));
+      }
+    }, 1000);
+  }
+
+  function stopInterpolationTimer() {
+    if (interpolationTimer) {
+      clearInterval(interpolationTimer);
+      interpolationTimer = null;
+    }
+  }
+
+  onDestroy(() => {
+    stopInterpolationTimer();
+  });
 
   async function processQueue() {
     if (isUploading) return;
     const nextItem = uploadQueue.find((item) => item.status === 'queued');
-    if (!nextItem) return;
+    if (!nextItem) {
+      stopInterpolationTimer();
+      return;
+    }
 
     isUploading = true;
     nextItem.status = 'uploading';
-    currentUpload = nextItem;
+    nextItem.anchorAt = Date.now();
+    nextItem.anchorSent = 0;
+    startInterpolationTimer();
 
     try {
       await uploadTusFile(
         nextItem.file,
-        appState.activeFolderId,
+        nextItem.folderId || null,
         (prog) => {
+          nextItem.bytesSent = prog.offset;
+          nextItem.bytesTotal = prog.total;
           nextItem.progress = prog.progress;
           nextItem.speed = prog.speed;
           nextItem.eta = prog.eta;
+          nextItem.anchorSent = prog.offset;
+          nextItem.anchorAt = Date.now();
+          nextItem.displaySent = prog.offset;
+          nextItem.displayProgress = prog.progress;
+          nextItem.displayEta = prog.eta;
+
           let entry = appState.activeUploads.find((u) => u.id === nextItem.id);
           if (!entry) {
-            entry = { id: nextItem.id, title: nextItem.title || nextItem.name, progress: prog.progress, speed: prog.speed, eta: prog.eta };
+            entry = {
+              id: nextItem.id,
+              title: nextItem.title || nextItem.name,
+              progress: prog.progress,
+              speed: prog.speed,
+              eta: prog.eta,
+            };
             appState.activeUploads = [...appState.activeUploads, entry];
           } else {
             entry.title = nextItem.title || nextItem.name;
@@ -70,6 +147,7 @@
         nextItem.title
       );
       nextItem.status = 'done';
+      nextItem.displayProgress = 100;
       appState.addToast(`Upload selesai: ${nextItem.title || nextItem.name}`, 'success');
       fetchVideos();
     } catch (err) {
@@ -83,7 +161,6 @@
     } finally {
       appState.activeUploads = appState.activeUploads.filter((u) => u.id !== nextItem.id);
       isUploading = false;
-      currentUpload = null;
       processQueue();
     }
   }
@@ -145,29 +222,40 @@
       </div>
 
       {#if uploadQueue.length > 0}
-        <div class="mt-6 max-h-48 overflow-y-auto space-y-3">
+        <div class="mt-6 max-h-56 overflow-y-auto space-y-3 pr-1">
           {#each uploadQueue as item (item.id)}
-            <div class="rounded-lg border border-theme-border bg-theme-card p-3">
-              <div class="flex items-center justify-between text-xs">
-                {#if item.status === 'queued'}
-                  <div class="mr-2 flex flex-1 flex-col gap-1">
+            <div class="rounded-xl border border-theme-border bg-theme-card p-3 shadow-sm">
+              <div class="flex items-start justify-between gap-2 text-xs">
+                {#if item.status === 'staged'}
+                  <div class="flex flex-1 flex-col gap-1.5 min-w-0">
                     <input
                       type="text"
                       bind:value={item.title}
                       placeholder="Judul video"
-                      class="w-full rounded border border-theme-border bg-theme-bg px-2 py-1 text-xs text-white outline-none focus:border-indigo-500"
+                      class="w-full rounded-lg border border-theme-border bg-theme-bg px-2.5 py-1 text-xs text-white outline-none focus:border-indigo-500"
                     />
-                    <span class="text-[10px] text-theme-muted truncate">{item.name} &bull; {formatBytes(item.size)}</span>
+                    <div class="flex items-center gap-2">
+                      <select
+                        bind:value={item.folderId}
+                        class="rounded border border-theme-border bg-theme-bg px-2 py-0.5 text-[11px] text-slate-300 outline-none focus:border-indigo-500"
+                      >
+                        <option value="">Tanpa Folder</option>
+                        {#each appState.folders as f}
+                          <option value={f.id}>{f.name}</option>
+                        {/each}
+                      </select>
+                      <span class="text-[10px] text-theme-muted truncate">{item.name} &bull; {formatBytes(item.size)}</span>
+                    </div>
                   </div>
                 {:else}
-                  <span class="font-semibold text-slate-200 line-clamp-1">{item.title || item.name}</span>
-                  <div class="flex items-center gap-2">
-                    <span class="text-theme-muted">{formatBytes(item.size)}</span>
+                  <div class="flex flex-1 flex-col min-w-0">
+                    <span class="font-semibold text-slate-200 truncate">{item.title || item.name}</span>
+                    <span class="text-[11px] text-theme-muted">{formatBytes(item.size)}</span>
                   </div>
                 {/if}
                 <button
                   onclick={() => cancelUpload(item)}
-                  class="flex h-5 w-5 shrink-0 items-center justify-center rounded text-theme-muted hover:bg-theme-border hover:text-white"
+                  class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-theme-muted hover:bg-theme-border hover:text-white cursor-pointer"
                   title="Batalkan"
                 >
                   <span class="material-symbols text-sm">close</span>
@@ -175,15 +263,31 @@
               </div>
 
               {#if item.status === 'uploading'}
-                <div class="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+                <div class="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-slate-800">
                   <div
                     class="h-full rounded-full bg-indigo-500 transition-all duration-300"
-                    style={`width: ${item.progress}%`}
+                    style={`width: ${item.displayProgress || item.progress}%`}
                   ></div>
                 </div>
-                <div class="mt-1 flex items-center justify-between text-[11px] text-theme-muted">
-                  <span>{item.progress}% &bull; {formatBytes(item.speed || 0)}/s</span>
-                  <span>ETA: {fmt(item.eta || 0)}</span>
+                <div class="mt-1.5 flex items-center justify-between text-xs text-slate-300">
+                  <span class="font-medium text-slate-200">
+                    {formatBytes(item.displaySent || item.bytesSent || 0)} / {formatBytes(item.size)} &bull; {item.displayProgress || item.progress}%
+                  </span>
+                  <span class="text-slate-400">
+                    {formatBytes(item.speed || 0)}/s &bull; ETA: {fmtEta(item.displayEta || item.eta)}
+                  </span>
+                </div>
+              {:else if item.status === 'staged'}
+                <div class="mt-1 flex items-center justify-between text-[11px] text-amber-400">
+                  <span class="flex items-center gap-1">
+                    <span class="material-symbols text-xs">edit_note</span>
+                    <span>Siap diunggah &bull; Tekan tombol Mulai Upload di bawah</span>
+                  </span>
+                </div>
+              {:else if item.status === 'queued'}
+                <div class="mt-1 flex items-center gap-1 text-[11px] text-theme-muted">
+                  <span class="material-symbols text-xs">hourglass_empty</span>
+                  <span>Menunggu giliran antrian...</span>
                 </div>
               {:else if item.status === 'done'}
                 <div class="mt-1 flex items-center gap-1 text-[11px] font-medium text-emerald-400">
@@ -194,20 +298,34 @@
                 <div class="mt-1 text-[11px] text-rose-400">
                   Error: {item.error}
                 </div>
-              {:else}
-                <div class="mt-1 text-[11px] text-theme-muted">
-                  Menunggu antrian...
-                </div>
               {/if}
             </div>
           {/each}
         </div>
       {/if}
 
-      <div class="mt-6 flex justify-end">
+      <div class="mt-6 flex items-center justify-between">
+        {#if stagedCount > 0}
+          <button
+            onclick={startUploadAll}
+            disabled={isUploading}
+            class="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs font-semibold text-white shadow-lg hover:bg-indigo-500 transition-colors disabled:opacity-50 cursor-pointer"
+          >
+            <span class="material-symbols text-base">play_arrow</span>
+            <span>Mulai Upload ({stagedCount})</span>
+          </button>
+        {:else if isUploading}
+          <span class="flex items-center gap-2 text-xs font-medium text-indigo-400">
+            <span class="material-symbols animate-spin text-base">progress_activity</span>
+            <span>Mengunggah antrian...</span>
+          </span>
+        {:else}
+          <div></div>
+        {/if}
+
         <button
           onclick={() => (appState.uploadDrawerOpen = false)}
-          class="rounded-lg border border-theme-border px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-theme-card"
+          class="rounded-xl border border-theme-border px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-theme-card cursor-pointer transition-colors"
         >
           Tutup
         </button>

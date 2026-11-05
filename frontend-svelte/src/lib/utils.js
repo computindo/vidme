@@ -26,3 +26,11 @@ export function formatBytes(bytes) {
   const i = Math.floor(Math.log(b) / Math.log(k));
   return `${parseFloat((b / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
+
+export function fmtEta(sec) {
+  if (!sec || !Number.isFinite(sec) || sec <= 0) return '—';
+  const s = Math.round(sec);
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
+  return `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}m`;
+}

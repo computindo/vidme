@@ -15,13 +15,14 @@ pub fn spawn_media_worker(
     pool: SqlitePool,
     config: Arc<Config>,
     sse_tx: broadcast::Sender<String>,
+    suggestions: Arc<crate::media::suggestions::SuggestionsManager>,
     mut rx: mpsc::Receiver<ProcessJob>,
 ) {
     tokio::spawn(async move {
         tracing::info!("Media worker loop started");
         while let Some(job) = rx.recv().await {
             tracing::info!("Processing video job: {}", job.video_id);
-            if let Err(e) = process_single_video(&pool, &config, &sse_tx, &job).await {
+            if let Err(e) = process_single_video(&pool, &config, &sse_tx, &suggestions, &job).await {
                 tracing::error!("Error processing video {}: {}", job.video_id, e);
             }
         }
@@ -32,6 +33,7 @@ async fn process_single_video(
     pool: &SqlitePool,
     config: &Config,
     sse_tx: &broadcast::Sender<String>,
+    suggestions: &crate::media::suggestions::SuggestionsManager,
     job: &ProcessJob,
 ) -> Result<(), String> {
     let video_id = &job.video_id;
@@ -77,6 +79,9 @@ async fn process_single_video(
                 .unwrap_or(0);
 
             let _ = db::videos::update_video_status(pool, video_id, "ready", Some(file_size)).await;
+
+            // vidme-suggested: queue new video into deck
+            suggestions.on_video_added(video_id).await;
 
             // 3-artifact policy: hapus staging segera setelah remux sukses
             let _ = tokio::fs::remove_file(staging_path).await;

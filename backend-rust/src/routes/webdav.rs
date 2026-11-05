@@ -436,26 +436,6 @@ async fn handle_get(inbox_dir: &str, sub_path: &str) -> Response {
                 });
                 let json_str = payload.to_string();
 
-                // Plain text listing (secondary, for Curl -H Accept text/plain or browser simplicity)
-                let root_label = if sub_path.is_empty() { "/webdav/".to_string() } else { format!("/webdav/{}/", sub_path) };
-                let mut text = format!("WebDAV root: {}\n\n", root_label);
-                if !folders.is_empty() {
-                    text.push_str("Folders:\n");
-                    for f in &folders {
-                        text.push_str(&format!("  {}/\n", f));
-                    }
-                }
-                if !files.is_empty() {
-                    text.push_str("\nFiles:\n");
-                    for f in &files {
-                        // size not in text (keep simple) - JSON carries it
-                        text.push_str(&format!("  {}\n", f));
-                    }
-                }
-                if folders.is_empty() && files.is_empty() {
-                    text.push_str("(empty)\n");
-                }
-
                 Response::builder()
                     .status(StatusCode::OK)
                     .header(header::CONTENT_TYPE, "application/json; charset=utf-8")

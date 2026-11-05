@@ -1,7 +1,9 @@
 use crate::config::Config;
+use crate::media::suggestions::SuggestionsManager;
 use crate::media::worker::ProcessJob;
 use sqlx::SqlitePool;
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{broadcast, mpsc, Mutex};
@@ -13,6 +15,7 @@ pub struct AppState {
     pub sse_tx: broadcast::Sender<String>,
     pub worker_tx: mpsc::Sender<ProcessJob>,
     pub in_flight_uploads: Arc<Mutex<HashMap<String, Instant>>>,
+    pub suggestions: Arc<SuggestionsManager>,
 }
 
 impl AppState {
@@ -22,12 +25,14 @@ impl AppState {
         worker_tx: mpsc::Sender<ProcessJob>,
     ) -> (Self, broadcast::Receiver<String>) {
         let (sse_tx, sse_rx) = broadcast::channel(200);
+        let suggestions = Arc::new(SuggestionsManager::new(Path::new(&config.storage_path)));
         let state = Self {
             pool,
             config: Arc::new(config),
             sse_tx,
             worker_tx,
             in_flight_uploads: Arc::new(Mutex::new(HashMap::new())),
+            suggestions,
         };
         (state, sse_rx)
     }
