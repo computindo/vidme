@@ -76,42 +76,40 @@ pub async fn generate_storyboard(
     let vf = vf_for(is_portrait);
     let ratios = [0.0f64, 0.25f64, 0.50f64, 0.75f64];
 
-    let mut sel_parts = Vec::new();
-    for (i, r) in ratios.iter().enumerate() {
-        let t = (dur as f64) * r;
-        let t0 = (t - 0.25).max(0.0);
-        let t1 = t + 0.25;
-        sel_parts.push(format!(
-            "[s{i}]select='gte(t\\,{t0:.2})*lt(t\\,{t1:.2})',{vf},format=yuvj420p[f{i}]"
-        ));
+    let mut args: Vec<String> = vec![
+        "-y".into(),
+        "-err_detect".into(),
+        "ignore_err".into(),
+        "-fflags".into(),
+        "+discardcorrupt".into(),
+    ];
+
+    for r in &ratios {
+        let pos = ((dur as f64) * r).max(0.0);
+        args.push("-ss".into());
+        args.push(format!("{:.2}", pos));
+        args.push("-i".into());
+        args.push(src.into());
     }
 
     let fc = format!(
-        "[0:v]split=4[s0][s1][s2][s3];{};[f0][f1][f2][f3]xstack=inputs=4:layout=0_0|w0_0|0_h0|w0_h0[xs];[xs]format=yuvj420p[v]",
-        sel_parts.join(";")
+        "[0:v]{vf},format=yuvj420p[f0];[1:v]{vf},format=yuvj420p[f1];[2:v]{vf},format=yuvj420p[f2];[3:v]{vf},format=yuvj420p[f3];[f0][f1][f2][f3]xstack=inputs=4:layout=0_0|w0_0|0_h0|w0_h0[v]"
     );
 
+    args.push("-filter_complex".into());
+    args.push(fc);
+    args.push("-map".into());
+    args.push("[v]".into());
+    args.push("-frames:v".into());
+    args.push("1".into());
+    args.push("-update".into());
+    args.push("1".into());
+    args.push("-q:v".into());
+    args.push("5".into());
+    args.push(out.into());
+
     let output_res = Command::new("ffmpeg")
-        .args([
-            "-y",
-            "-err_detect",
-            "ignore_err",
-            "-fflags",
-            "+discardcorrupt",
-            "-i",
-            src,
-            "-filter_complex",
-            &fc,
-            "-map",
-            "[v]",
-            "-frames:v",
-            "1",
-            "-update",
-            "1",
-            "-q:v",
-            "5",
-            out,
-        ])
+        .args(&args)
         .output()
         .await
         .map_err(|e| format!("Failed to spawn ffmpeg storyboard: {}", e))?;

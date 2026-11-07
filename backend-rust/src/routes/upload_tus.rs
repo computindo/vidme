@@ -226,6 +226,10 @@ pub async fn upload_chunk(
     file.write_all(&body)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    file.flush()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    drop(file);
 
     let new_offset = current_offset + body.len() as u64;
 
@@ -247,6 +251,10 @@ pub async fn upload_chunk(
                         tracing::warn!("TUS upload rejected: non-H.264 codec ({})", codec);
                         let _ = tokio::fs::remove_file(&chunk_path).await;
                         let _ = tokio::fs::remove_file(&meta_path).await;
+                        if let Some(ref dk) = meta_info.dup_key {
+                            let mut in_flight = state.in_flight_uploads.lock().await;
+                            in_flight.remove(dk);
+                        }
                         return Err((
                             StatusCode::UNPROCESSABLE_ENTITY,
                             format!("Only H.264 video is accepted (got: {}). Convert first, then re-upload.", codec),
@@ -257,6 +265,10 @@ pub async fn upload_chunk(
                     tracing::warn!("TUS upload probe failed: not a valid video ({})", e);
                     let _ = tokio::fs::remove_file(&chunk_path).await;
                     let _ = tokio::fs::remove_file(&meta_path).await;
+                    if let Some(ref dk) = meta_info.dup_key {
+                        let mut in_flight = state.in_flight_uploads.lock().await;
+                        in_flight.remove(dk);
+                    }
                     return Err((
                         StatusCode::UNPROCESSABLE_ENTITY,
                         "Uploaded file is not a valid video".to_string(),
