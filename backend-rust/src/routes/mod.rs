@@ -1,3 +1,4 @@
+pub mod albums;
 pub mod download;
 pub mod events;
 pub mod folders;
@@ -33,6 +34,23 @@ pub fn create_router() -> Router<AppState> {
             "/api/folders/:id",
             patch(folders::update_folder).delete(folders::delete_folder),
         )
+        // Album Routes
+        .route(
+            "/api/albums",
+            get(albums::list_albums).post(albums::create_album),
+        )
+        .route(
+            "/api/albums/:id",
+            get(albums::get_album)
+                .patch(albums::update_album)
+                .delete(albums::delete_album),
+        )
+        .route(
+            "/api/albums/:id/videos",
+            post(albums::add_videos_to_album).delete(albums::remove_videos_from_album),
+        )
+        .route("/api/albums/:id/cover", post(albums::set_album_cover))
+        .route("/cover-image/:albumId", get(albums::get_cover_image))
         // Streaming & Asset Routes
         .route("/stream/:id", get(stream::stream_video))
         .route("/thumb/:id", get(stream::get_thumb))

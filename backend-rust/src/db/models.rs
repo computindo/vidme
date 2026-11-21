@@ -18,6 +18,7 @@ pub struct Video {
     pub has_storyboard: i64,
     pub has_microclip: i64,
     pub fps: Option<f64>,
+    pub tags: Option<String>,
     pub created_at: Option<String>,
 }
 
@@ -43,6 +44,7 @@ pub struct FolderTree {
 pub struct UpdateVideoPayload {
     pub title: Option<String>,
     pub folder_id: Option<Option<String>>,
+    pub tags: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -70,4 +72,34 @@ pub struct VideoMeta {
     pub is_portrait: bool,
     pub fps: Option<f64>,
     pub codec: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct Album {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub cover_video_id: Option<String>,
+    pub cover_image: Option<String>,
+    pub created_at: Option<String>,
+    pub video_count: i64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CreateAlbumPayload {
+    pub name: String,
+    pub description: Option<String>,
+    pub cover_video_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct UpdateAlbumPayload {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub cover_video_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AlbumMembersPayload {
+    pub video_ids: Vec<String>,
 }

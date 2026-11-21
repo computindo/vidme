@@ -174,6 +174,30 @@ pub async fn update_video_details(
         }
     }
 
+    if let Some(ref tags) = payload.tags {
+        let cleaned: Vec<String> = tags
+            .split(',')
+            .map(|t| t.trim().to_lowercase())
+            .filter(|t| !t.is_empty())
+            .collect();
+
+        if cleaned.is_empty() {
+            sqlx::query("UPDATE videos SET tags = NULL WHERE id = ?")
+                .bind(id)
+                .execute(pool)
+                .await?;
+            video.tags = None;
+        } else {
+            let joined = cleaned.join(",");
+            sqlx::query("UPDATE videos SET tags = ? WHERE id = ?")
+                .bind(&joined)
+                .bind(id)
+                .execute(pool)
+                .await?;
+            video.tags = Some(joined);
+        }
+    }
+
     Ok(Some(video))
 }
 

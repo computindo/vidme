@@ -148,7 +148,7 @@ pub async fn get_clip(
     Err((StatusCode::NOT_FOUND, "Clip not found".to_string()))
 }
 
-async fn serve_static_file(path: &StdPath, content_type: &str) -> Result<Response, (StatusCode, String)> {
+pub(crate) async fn serve_static_file(path: &StdPath, content_type: &str) -> Result<Response, (StatusCode, String)> {
     let file = File::open(path)
         .await
         .map_err(|_| (StatusCode::NOT_FOUND, "File not found".to_string()))?;

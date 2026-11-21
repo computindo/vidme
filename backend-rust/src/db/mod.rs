@@ -1,3 +1,4 @@
+pub mod albums;
 pub mod folders;
 pub mod models;
 pub mod videos;
@@ -44,6 +45,20 @@ async fn init_tables(pool: &SqlitePool) -> Result<(), sqlx::Error> {
             status TEXT DEFAULT 'processing',
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
+        CREATE TABLE IF NOT EXISTS albums (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            cover_video_id TEXT REFERENCES videos(id) ON DELETE SET NULL,
+            cover_image TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS album_videos (
+            album_id TEXT REFERENCES albums(id) ON DELETE CASCADE,
+            video_id TEXT REFERENCES videos(id) ON DELETE CASCADE,
+            added_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (album_id, video_id)
+        );
         "#
     )
     .execute(pool)
@@ -54,6 +69,7 @@ async fn init_tables(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     let _ = sqlx::query("ALTER TABLE videos ADD COLUMN has_storyboard INTEGER DEFAULT 0").execute(pool).await;
     let _ = sqlx::query("ALTER TABLE videos ADD COLUMN has_microclip INTEGER DEFAULT 0").execute(pool).await;
     let _ = sqlx::query("ALTER TABLE videos ADD COLUMN fps REAL").execute(pool).await;
+    let _ = sqlx::query("ALTER TABLE videos ADD COLUMN tags TEXT").execute(pool).await;
     let _ = sqlx::query("ALTER TABLE folders ADD COLUMN parent_id TEXT").execute(pool).await;
 
     Ok(())
