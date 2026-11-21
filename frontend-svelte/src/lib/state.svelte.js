@@ -26,6 +26,7 @@ class GlobalState {
   // Multi-select mode
   isSelectMode = $state(false);
   selectedIds = $state([]);
+  albums = $state([]);
   suggestions = $state([]);
 
   // Derived: Active video object
@@ -108,7 +109,15 @@ class GlobalState {
   }
 
   selectAllVisible(ids) {
-    this.selectedIds = [...new Set([...this.selectedIds, ...ids])];
+    if (this.isAllVisibleSelected(ids)) {
+      this.selectedIds = this.selectedIds.filter((x) => !ids.includes(x));
+    } else {
+      this.selectedIds = [...new Set([...this.selectedIds, ...ids])];
+    }
+  }
+
+  isAllVisibleSelected(ids) {
+    return ids.length > 0 && ids.every((id) => this.selectedIds.includes(id));
   }
 
   clearSelection() {

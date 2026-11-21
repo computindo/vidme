@@ -155,3 +155,92 @@ export async function bulkPinVideos(ids, isPinned) {
     appState.addToast(`Gagal pin video: ${err.message}`, 'error');
   }
 }
+
+export async function fetchAlbums() {
+  try {
+    const res = await fetch('/api/albums');
+    if (res.ok) {
+      appState.albums = await res.json();
+    }
+  } catch (err) {
+    console.error('Failed to fetch albums:', err);
+  }
+}
+
+export async function bulkSetTags(ids, tags) {
+  if (!ids || ids.length === 0) return;
+  const norm = tags.toLowerCase();
+  try {
+    await Promise.all(
+      ids.map((id) =>
+        fetch(`/api/videos/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tags: norm }),
+        })
+      )
+    );
+    appState.videos = appState.videos.map((v) => (ids.includes(v.id) ? { ...v, tags: norm } : v));
+    appState.selectedIds = [];
+    appState.isSelectMode = false;
+    appState.addToast(`Tag disimpan untuk ${ids.length} video`, 'success');
+  } catch (err) {
+    appState.addToast(`Gagal set tag: ${err.message}`, 'error');
+  }
+}
+
+export async function bulkAddToAlbum(ids, albumId) {
+  if (!ids || ids.length === 0) return;
+  try {
+    const res = await fetch(`/api/albums/${albumId}/videos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ video_ids: ids }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    appState.selectedIds = [];
+    appState.isSelectMode = false;
+    appState.addToast(`${ids.length} video ditambahkan ke album`, 'success');
+  } catch (err) {
+    appState.addToast(`Gagal menambahkan ke album: ${err.message}`, 'error');
+  }
+}
+
+export async function bulkRemoveFromAlbum(ids, albumId) {
+  if (!ids || ids.length === 0) return;
+  try {
+    const res = await fetch(`/api/albums/${albumId}/videos`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ video_ids: ids }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    appState.addToast(`${ids.length} video dihapus dari album`, 'success');
+  } catch (err) {
+    appState.addToast(`Gagal menghapus dari album: ${err.message}`, 'error');
+  }
+}
+
+export async function bulkMoveFolder(ids, folderId) {
+  if (!ids || ids.length === 0) return;
+  try {
+    await Promise.all(
+      ids.map((id) =>
+        fetch(`/api/videos/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ folder_id: folderId }),
+        })
+      )
+    );
+    appState.videos = appState.videos.map((v) => (ids.includes(v.id) ? { ...v, folder_id: folderId } : v));
+    appState.selectedIds = [];
+    appState.isSelectMode = false;
+    appState.addToast(
+      folderId ? `${ids.length} video dipindahkan ke folder` : `${ids.length} video dikeluarkan dari folder`,
+      'success'
+    );
+  } catch (err) {
+    appState.addToast(`Gagal memindahkan folder: ${err.message}`, 'error');
+  }
+}
