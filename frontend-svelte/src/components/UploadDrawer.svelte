@@ -31,6 +31,8 @@
         displayProgress: 0,
         speed: 0,
         eta: 0,
+        chunkSize: 0,
+        chunkIndex: 0,
         displayEta: 0,
         anchorSent: 0,
         anchorAt: Date.now(),
@@ -120,6 +122,8 @@
           nextItem.progress = prog.progress;
           nextItem.speed = prog.speed;
           nextItem.eta = prog.eta;
+          nextItem.chunkSize = prog.chunkSize;
+          nextItem.chunkIndex = prog.chunkIndex;
           nextItem.anchorSent = prog.offset;
           nextItem.anchorAt = Date.now();
           nextItem.displaySent = prog.offset;
@@ -273,8 +277,8 @@
                   <span class="font-medium text-slate-200">
                     {formatBytes(item.displaySent || item.bytesSent || 0)} / {formatBytes(item.size)} &bull; {item.displayProgress || item.progress}%
                   </span>
-                  <span class="text-slate-400">
-                    {formatBytes(item.speed || 0)}/s &bull; ETA: {fmtEta(item.displayEta || item.eta)}
+                  <span class="text-xs text-theme-muted">
+                    {#if item.chunkSize}Chunk {(item.chunkSize / 1048576).toFixed(0)} MB &bull; {/if}{formatBytes(item.speed || 0)}/s &bull; ETA: {fmtEta(item.displayEta || item.eta)}
                   </span>
                 </div>
               {:else if item.status === 'staged'}

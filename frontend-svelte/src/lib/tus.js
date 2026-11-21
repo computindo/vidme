@@ -106,6 +106,11 @@ const TUS_SPEED_DOWN_MBPS = 0.9;              // speed < 0.9 MB/s -> fall back t
 export async function uploadTusFile(file, folderId, onProgress, signal, customTitle = null) {
   let chunkSize = TUS_CHUNK_SIZE_SMALL;
 
+  // ANALISIS "adaptive cuma jalan di awal": (1) EMA awal 0 -> mbps<0.9 -> chunk-1 selalu 4MB;
+  // (2) EMA 0.7/0.3 konvergen lambat (link ~1.3MB/s butuh ~5 chunk sebelum EMA>1.0 -> 8MB);
+  // (3) hysteresis 1.0/0.9 memang sticky by design (anti goyang tiap chunk);
+  // (4) link publik terukur ~1.1-1.5MB/s = pas di garis threshold -> perpindahan jarang.
+  // JANGAN ubah EMA/hysteresis tanpa data: indikator chunk dulu, tuning menyusul.
   function syncChunkSize(speed) {
     const mbps = speed / 1048576;
     if (mbps > TUS_SPEED_UP_MBPS) {
@@ -148,6 +153,7 @@ export async function uploadTusFile(file, folderId, onProgress, signal, customTi
 
   let offset = 0;
   let speedEma = 0;
+  let chunkIndex = 0;
 
   while (offset < file.size) {
     if (signal?.aborted) {
@@ -204,6 +210,14 @@ export async function uploadTusFile(file, folderId, onProgress, signal, customTi
     const chunkDuration = (Date.now() - chunkStart) / 1000;
     const instantSpeed = chunkBlob.size / (chunkDuration || 0.1);
     speedEma = speedEma === 0 ? instantSpeed : 0.7 * speedEma + 0.3 * instantSpeed;
+    chunkIndex++;
+
+    console.debug('[tus] chunk', {
+      chunkIndex,
+      chunkSize,
+      instantSpeedMBps: +(instantSpeed / 1048576).toFixed(2),
+      emaMBps: +(speedEma / 1048576).toFixed(2),
+    });
 
     offset = chunkEnd;
     const remainingBytes = file.size - offset;
@@ -211,7 +225,7 @@ export async function uploadTusFile(file, folderId, onProgress, signal, customTi
     const progress = Math.round((offset / file.size) * 100);
 
     if (onProgress) {
-      onProgress({ progress, speed: speedEma, eta: etaSec, offset, total: file.size });
+      onProgress({ progress, speed: speedEma, eta: etaSec, offset, total: file.size, chunkSize, chunkIndex });
     }
   }
 
