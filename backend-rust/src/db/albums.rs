@@ -1,4 +1,4 @@
-use super::models::{Album, CreateAlbumPayload, UpdateAlbumPayload};
+use super::models::{Album, CreateAlbumPayload, UpdateAlbumPayload, Video};
 use sqlx::SqlitePool;
 
 pub async fn list_albums(pool: &SqlitePool) -> Result<Vec<Album>, sqlx::Error> {
@@ -149,6 +149,18 @@ pub async fn remove_videos_from_album(
 
     let res = q.execute(pool).await?;
     Ok(res.rows_affected())
+}
+
+pub async fn list_album_videos(pool: &SqlitePool, album_id: &str) -> Result<Vec<Video>, sqlx::Error> {
+    sqlx::query_as::<_, Video>(
+        "SELECT v.* FROM videos v
+         INNER JOIN album_videos av ON av.video_id = v.id
+         WHERE av.album_id = ?
+         ORDER BY av.added_at DESC"
+    )
+    .bind(album_id)
+    .fetch_all(pool)
+    .await
 }
 
 pub async fn list_album_video_ids(pool: &SqlitePool, album_id: &str) -> Result<Vec<String>, sqlx::Error> {

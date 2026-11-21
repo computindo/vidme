@@ -9,6 +9,24 @@
   const portraitCount = $derived(appState.videos.filter((v) => v.is_portrait === 1).length);
   const landscapeCount = $derived(appState.videos.filter((v) => v.is_portrait === 0).length);
   const uncategorizedCount = $derived(appState.videos.filter((v) => !v.folder_id).length);
+
+  // Unique tags dari field tags video (comma-separated)
+  const tagList = $derived.by(() => {
+    const counts = new Map();
+    for (const v of appState.videos) {
+      if (!v.tags) continue;
+      for (const raw of v.tags.split(",")) {
+        const t = raw.trim();
+        if (!t) continue;
+        counts.set(t, (counts.get(t) || 0) + 1);
+      }
+    }
+    return Array.from(counts.entries())
+      .map(([name, count]) => ({ name, count, slug: slugify(name) }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+  });
+
+  let tagsOpen = $state(false);
 </script>
 
 {#if appState.sidebarOpen}
@@ -104,6 +122,46 @@
           </button>
         </div>
       {/each}
+    {/if}
+
+    <h2 class="mt-6 mb-2 text-xs font-semibold uppercase tracking-widest text-slate-500">Albums</h2>
+    {#if appState.albums.length > 0}
+      {#each appState.albums as album (album.id)}
+        <button
+          onclick={() => appState.navigate(`/album/${slugify(album.name)}`)}
+          class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors truncate {appState.currentRoute === 'album' && appState.activeAlbumId === album.id ? 'text-indigo-300 bg-slate-800' : 'text-slate-400 hover:bg-slate-800'}"
+        >
+          <span class="material-symbols text-xl text-slate-400">photo_library</span>
+          <span class="truncate">{album.name}</span>
+          <span class="ml-auto text-xs text-slate-500">{album.video_count}</span>
+        </button>
+      {/each}
+    {:else}
+      <p class="px-3 py-1 text-xs text-slate-600">Belum ada album</p>
+    {/if}
+
+    <h2 class="mt-6 mb-2">
+      <button
+        onclick={() => (tagsOpen = !tagsOpen)}
+        class="flex w-full items-center justify-between rounded-lg px-3 py-1 text-left text-xs font-semibold uppercase tracking-widest text-slate-500 transition-colors hover:text-slate-300 cursor-pointer"
+        title="Tampilkan/sembunyikan tag"
+      >
+        <span>#Tags</span>
+        <span class="material-symbols text-base">{tagsOpen ? "expand_less" : "expand_more"}</span>
+      </button>
+    </h2>
+    {#if tagsOpen && tagList.length > 0}
+      <div class="grid grid-cols-2 gap-2 px-1 pb-2">
+        {#each tagList as tag (tag.slug)}
+          <button
+            onclick={() => appState.navigate(`/tag/${tag.slug}`)}
+            class="rounded-lg border border-theme-border bg-theme-card px-2.5 py-2 text-left transition-colors hover:border-indigo-500/60 hover:bg-slate-800 {appState.currentRoute === 'tag' && appState.activeTagSlug === tag.slug ? 'border-indigo-500/60 bg-slate-800' : ''}"
+          >
+            <p class="truncate text-xs font-medium text-slate-200">#{tag.name}</p>
+            <p class="text-[10px] text-slate-500">{tag.count} video</p>
+          </button>
+        {/each}
+      </div>
     {/if}
   </nav>
 </aside>
