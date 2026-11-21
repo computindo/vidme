@@ -19,6 +19,9 @@
     appState.suggestions.length > 0 ? appState.suggestions : nonPinnedVideos.slice(0, 15)
   );
 
+  const portraitCount = $derived(appState.videos.filter((v) => v.is_portrait === 1).length);
+  const landscapeCount = $derived(appState.videos.filter((v) => v.is_portrait === 0).length);
+
   const pagedVideos = $derived.by(() => {
     const start = (appState.page - 1) * PAGE_SIZE;
     return nonPinnedVideos.slice(start, start + PAGE_SIZE);
@@ -37,6 +40,24 @@
 
 <div class="mx-auto w-full max-w-7xl px-4 py-6 md:px-8">
   {#if isHomeLanding}
+    <div class="mb-8 flex flex-wrap items-center gap-2">
+      <span class="flex items-center gap-1.5 rounded-full border border-theme-border bg-theme-surface px-3 py-1.5 text-sm">
+        <span class="material-symbols text-base text-indigo-400">video_library</span>
+        <span class="font-bold text-white">{appState.videos.length}</span>
+        <span class="text-theme-muted">Video</span>
+      </span>
+      <span class="flex items-center gap-1.5 rounded-full border border-theme-border bg-theme-surface px-3 py-1.5 text-sm">
+        <span class="material-symbols text-base text-indigo-400">smartphone</span>
+        <span class="font-bold text-white">{portraitCount}</span>
+        <span class="text-theme-muted">Portrait</span>
+      </span>
+      <span class="flex items-center gap-1.5 rounded-full border border-theme-border bg-theme-surface px-3 py-1.5 text-sm">
+        <span class="material-symbols text-base text-indigo-400">crop_landscape</span>
+        <span class="font-bold text-white">{landscapeCount}</span>
+        <span class="text-theme-muted">Landscape</span>
+      </span>
+    </div>
+
     {#if appState.pinnedVideos.length > 0}
       <section class="mb-8">
         <h2 class="mb-4 flex items-center gap-2 text-lg font-bold text-white">

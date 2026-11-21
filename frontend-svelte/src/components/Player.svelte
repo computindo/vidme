@@ -4,6 +4,8 @@
   import { updateVideoTitle } from "../lib/api.js";
   import { fmt } from "../lib/utils.js";
 
+  const SKIP_S = 5;
+
   const video = $derived(appState.activeVideo);
 
   let videoEl = $state(null);
@@ -23,9 +25,6 @@
 
   let isScrubbing = $state(false);
   let wasPlayingBeforeScrub = false;
-  let lastTapLeft = 0;
-  let lastTapRight = 0;
-  let tapTimer = null;
   let skipFeedback = $state(null);
   let feedbackTimer = null;
 
@@ -88,44 +87,11 @@
     }
   }
 
-  function handleLeftAreaClick(e) {
+  // Klik 1x di area video = tampilkan kontrol saja, TANPA toggle play/pause.
+  // Skip hanya lewat dblclick zona kiri/kanan, tombol, dan keyboard.
+  function handleSurfaceClick(e) {
     e?.stopPropagation?.();
-    const now = Date.now();
-    if (now - lastTapLeft < 320) {
-      clearTimeout(tapTimer);
-      lastTapLeft = 0;
-      skipTime(-5);
-      showSkipFeedback("-5s", "left");
-    } else {
-      lastTapLeft = now;
-      clearTimeout(tapTimer);
-      tapTimer = setTimeout(() => {
-        togglePlay();
-      }, 320);
-    }
-  }
-
-  function handleRightAreaClick(e) {
-    e?.stopPropagation?.();
-    const now = Date.now();
-    if (now - lastTapRight < 320) {
-      clearTimeout(tapTimer);
-      lastTapRight = 0;
-      skipTime(5);
-      showSkipFeedback("+5s", "right");
-    } else {
-      lastTapRight = now;
-      clearTimeout(tapTimer);
-      tapTimer = setTimeout(() => {
-        togglePlay();
-      }, 320);
-    }
-  }
-
-  function handleCenterAreaClick(e) {
-    e?.stopPropagation?.();
-    clearTimeout(tapTimer);
-    togglePlay();
+    resetControlsTimeout();
   }
 
   function showSkipFeedback(text, side) {
@@ -201,19 +167,19 @@
         break;
       case "arrowleft":
         e.preventDefault();
-        skipTime(-5);
+        skipTime(-SKIP_S);
         break;
       case "arrowright":
         e.preventDefault();
-        skipTime(5);
+        skipTime(SKIP_S);
         break;
       case "j":
         e.preventDefault();
-        skipTime(-10);
+        skipTime(-SKIP_S);
         break;
       case "l":
         e.preventDefault();
-        skipTime(10);
+        skipTime(SKIP_S);
         break;
       case "m":
         e.preventDefault();
@@ -264,7 +230,6 @@
     window.removeEventListener("keydown", handleKeyDown);
     clearTimeout(holdTimer);
     clearTimeout(controlsTimeout);
-    clearTimeout(tapTimer);
     clearTimeout(feedbackTimer);
   });
 </script>
@@ -302,7 +267,7 @@
       onplay={() => (isPlaying = true)}
       onpause={() => (isPlaying = false)}
       ontimeupdate={handleTimeUpdate}
-      onclick={togglePlay}
+      onclick={resetControlsTimeout}
     ></video>
 
     {#if isHolding2x}
@@ -327,31 +292,34 @@
         </h1>
       </div>
 
-      <!-- Area tengah interaktif: 3 kolom (Kiri 30% double-tap -5s, Tengah 40% play/pause, Kanan 30% double-tap +5s) -->
+      <!-- Area tengah interaktif: 3 kolom (Kiri 30% dblclick -5s, Tengah 40% dblclick play/pause, Kanan 30% dblclick +5s). Klik 1x di zona mana pun hanya menampilkan kontrol. -->
       <div class="flex-1 w-full flex items-stretch pointer-events-auto">
         <!-- Zona Kiri: Mundur 5s saat klik 2x -->
         <div
           role="button"
           tabindex="0"
-          aria-label="Mundur 5 detik"
+          aria-label="Mundur 5 detik (klik 2x)"
           class="w-[30%] cursor-pointer flex items-center justify-start select-none"
-          onclick={handleLeftAreaClick}
+          onclick={handleSurfaceClick}
           ondblclick={(e) => {
             e.stopPropagation();
-            clearTimeout(tapTimer);
-            skipTime(-5);
+            skipTime(-SKIP_S);
             showSkipFeedback("-5s", "left");
           }}
           onkeydown={(e) => (e.key === " " || e.key === "Enter") && togglePlay()}
         ></div>
 
-        <!-- Zona Tengah: Play/Pause -->
+        <!-- Zona Tengah: klik 2x = Play/Pause -->
         <div
           role="button"
           tabindex="0"
-          aria-label={isPlaying ? "Jeda video" : "Putar video"}
+          aria-label="Klik 2x untuk putar atau jeda"
           class="flex-1 cursor-pointer flex items-center justify-center select-none"
-          onclick={handleCenterAreaClick}
+          onclick={handleSurfaceClick}
+          ondblclick={(e) => {
+            e.stopPropagation();
+            togglePlay();
+          }}
           onkeydown={(e) => (e.key === " " || e.key === "Enter") && togglePlay()}
         >
           {#if !isPlaying}
@@ -365,13 +333,12 @@
         <div
           role="button"
           tabindex="0"
-          aria-label="Maju 5 detik"
+          aria-label="Maju 5 detik (klik 2x)"
           class="w-[30%] cursor-pointer flex items-center justify-end select-none"
-          onclick={handleRightAreaClick}
+          onclick={handleSurfaceClick}
           ondblclick={(e) => {
             e.stopPropagation();
-            clearTimeout(tapTimer);
-            skipTime(5);
+            skipTime(SKIP_S);
             showSkipFeedback("+5s", "right");
           }}
           onkeydown={(e) => (e.key === " " || e.key === "Enter") && togglePlay()}
@@ -392,8 +359,8 @@
           onpointerup={handleScrubberPointerUp}
           onpointercancel={handleScrubberPointerUp}
           onkeydown={(e) => {
-            if (e.key === "ArrowLeft") skipTime(-5);
-            if (e.key === "ArrowRight") skipTime(5);
+            if (e.key === "ArrowLeft") skipTime(-SKIP_S);
+            if (e.key === "ArrowRight") skipTime(SKIP_S);
           }}
         >
           <div class="relative h-1 w-full rounded-full bg-white/20 transition-all group-hover/timeline:h-2">
@@ -412,12 +379,12 @@
               </span>
             </button>
 
-            <button onclick={() => skipTime(-10)} class="flex items-center justify-center text-white/80 hover:text-white" title="Mundur 10s (J)">
-              <span class="material-symbols text-xl">replay_10</span>
+            <button onclick={() => skipTime(-SKIP_S)} class="flex items-center justify-center text-white/80 hover:text-white" title="Mundur 5s (J)">
+              <span class="material-symbols text-xl">replay_5</span>
             </button>
 
-            <button onclick={() => skipTime(10)} class="flex items-center justify-center text-white/80 hover:text-white" title="Maju 10s (L)">
-              <span class="material-symbols text-xl">forward_10</span>
+            <button onclick={() => skipTime(SKIP_S)} class="flex items-center justify-center text-white/80 hover:text-white" title="Maju 5s (L)">
+              <span class="material-symbols text-xl">forward_5</span>
             </button>
 
             <div class="flex items-center gap-1.5">
