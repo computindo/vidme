@@ -161,9 +161,118 @@ export async function fetchAlbums() {
     const res = await fetch('/api/albums');
     if (res.ok) {
       appState.albums = await res.json();
+      appState.parseCurrentUrl();
     }
   } catch (err) {
     console.error('Failed to fetch albums:', err);
+  }
+}
+
+export async function fetchAlbumVideoIds(albumId) {
+  const res = await fetch(`/api/albums/${albumId}/videos`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function createAlbum(name, opts = {}) {
+  try {
+    const res = await fetch('/api/albums', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, ...opts }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const album = await res.json();
+    appState.albums = [...appState.albums, album];
+    appState.addToast('Album dibuat', 'success');
+    return album;
+  } catch (err) {
+    appState.addToast(`Gagal membuat album: ${err.message}`, 'error');
+    return null;
+  }
+}
+
+export async function updateAlbum(id, payload) {
+  try {
+    const res = await fetch(`/api/albums/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const album = await res.json();
+    appState.albums = appState.albums.map((a) => (a.id === id ? album : a));
+    appState.addToast('Album diperbarui', 'success');
+    return album;
+  } catch (err) {
+    appState.addToast(`Gagal memperbarui album: ${err.message}`, 'error');
+    return null;
+  }
+}
+
+export async function deleteAlbum(id) {
+  try {
+    const res = await fetch(`/api/albums/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    appState.albums = appState.albums.filter((a) => a.id !== id);
+    const { [id]: _, ...members } = appState.albumMembers;
+    appState.albumMembers = members;
+    appState.addToast('Album dihapus (video tetap aman)', 'success');
+    return true;
+  } catch (err) {
+    appState.addToast(`Gagal menghapus album: ${err.message}`, 'error');
+    return false;
+  }
+}
+
+export async function uploadAlbumCover(albumId, file) {
+  try {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`/api/albums/${albumId}/cover`, { method: 'POST', body: form });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const album = await res.json();
+    appState.albums = appState.albums.map((a) => (a.id === albumId ? album : a));
+    appState.addToast('Cover album diunggah', 'success');
+    return album;
+  } catch (err) {
+    appState.addToast(`Gagal unggah cover: ${err.message}`, 'error');
+    return null;
+  }
+}
+
+export async function setAlbumCoverVideo(albumId, videoId) {
+  return updateAlbum(albumId, { cover_video_id: videoId });
+}
+
+export async function addVideoToAlbum(videoId, albumId) {
+  await bulkAddToAlbum([videoId], albumId);
+}
+
+export async function removeVideoFromAlbum(videoId, albumId) {
+  await bulkRemoveFromAlbum([videoId], albumId);
+}
+
+export async function setVideoTags(id, tags) {
+  const norm = String(tags || '')
+    .split(',')
+    .map((t) => t.trim().toLowerCase())
+    .filter(Boolean)
+    .join(',');
+  try {
+    const res = await fetch(`/api/videos/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tags: norm }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const updated = await res.json();
+    updateVideoInState(updated);
+    appState.addToast('Tag disimpan', 'success');
+    return updated;
+  } catch (err) {
+    appState.addToast(`Gagal set tag: ${err.message}`, 'error');
+    return null;
   }
 }
 
@@ -201,6 +310,7 @@ export async function bulkAddToAlbum(ids, albumId) {
     appState.selectedIds = [];
     appState.isSelectMode = false;
     appState.addToast(`${ids.length} video ditambahkan ke album`, 'success');
+    await appState.fetchAllAlbumMemberships();
   } catch (err) {
     appState.addToast(`Gagal menambahkan ke album: ${err.message}`, 'error');
   }
@@ -216,6 +326,7 @@ export async function bulkRemoveFromAlbum(ids, albumId) {
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     appState.addToast(`${ids.length} video dihapus dari album`, 'success');
+    await appState.fetchAllAlbumMemberships();
   } catch (err) {
     appState.addToast(`Gagal menghapus dari album: ${err.message}`, 'error');
   }

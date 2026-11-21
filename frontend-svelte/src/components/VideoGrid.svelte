@@ -2,6 +2,7 @@
   import { appState } from "../lib/state.svelte.js";
   import HeroCarousel from "./HeroCarousel.svelte";
   import VideoCard from "./VideoCard.svelte";
+  import AlbumCard from "./AlbumCard.svelte";
 
   const isHomeLanding = $derived(
     !appState.activeFolderId && !appState.virtualView && !appState.searchQuery && !appState.isPageMode
@@ -27,6 +28,32 @@
     return nonPinnedVideos.slice(start, start + PAGE_SIZE);
   });
 
+  // Albums shown in the "Albums" section per current view (members via albumMembers)
+  const visibleAlbums = $derived.by(() => {
+    if (appState.searchQuery.trim()) return [];
+    const vid = (id) => appState.videos.find((v) => v.id === id);
+    const hasMember = (a, pred) =>
+      (appState.albumMembers[a.id] || []).some((id) => {
+        const v = vid(id);
+        return v && pred(v);
+      });
+
+    if (appState.virtualView === "portrait") {
+      return appState.albums.filter((a) => hasMember(a, (v) => v.is_portrait === 1));
+    }
+    if (appState.virtualView === "landscape") {
+      return appState.albums.filter((a) => hasMember(a, (v) => v.is_portrait === 0));
+    }
+    if (appState.virtualView === "uncategorized") {
+      return appState.albums.filter((a) => hasMember(a, (v) => !v.folder_id));
+    }
+    if (appState.activeFolderId) {
+      return appState.albums.filter((a) => hasMember(a, (v) => v.folder_id === appState.activeFolderId));
+    }
+    // Home landing + explore (page mode): semua album
+    return appState.albums;
+  });
+
   function setPage(p) {
     if (p < 1 || p > totalPages) return;
     const basePath = (typeof window !== "undefined" ? window.location.pathname : "/").replace(/\/$/, "") || "/";
@@ -39,6 +66,20 @@
 </script>
 
 <div class="mx-auto w-full max-w-7xl px-4 py-6 md:px-8">
+  {#if visibleAlbums.length > 0}
+    <section class="mb-8">
+      <h2 class="mb-4 flex items-center gap-2 text-lg font-bold text-white">
+        <span class="material-symbols text-indigo-400">photo_library</span>
+        <span>Albums</span>
+      </h2>
+      <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        {#each visibleAlbums as album (album.id)}
+          <AlbumCard {album} />
+        {/each}
+      </div>
+    </section>
+  {/if}
+
   {#if isHomeLanding}
     <div class="mb-8 flex flex-wrap items-center gap-2">
       <span class="flex items-center gap-1.5 rounded-full border border-theme-border bg-theme-surface px-3 py-1.5 text-sm">

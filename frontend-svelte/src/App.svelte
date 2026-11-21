@@ -1,7 +1,7 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
   import { appState } from './lib/state.svelte.js';
-  import { fetchVideos, fetchFolders, fetchSuggestions, initSSE } from './lib/api.js';
+  import { fetchVideos, fetchFolders, fetchSuggestions, fetchAlbums, initSSE } from './lib/api.js';
 
   import Navbar from './components/Navbar.svelte';
   import Sidebar from './components/Sidebar.svelte';
@@ -9,6 +9,8 @@
   import SelectBar from './components/SelectBar.svelte';
   import VideoGrid from './components/VideoGrid.svelte';
   import Player from './components/Player.svelte';
+  import AlbumPage from './components/AlbumPage.svelte';
+  import TagPage from './components/TagPage.svelte';
   import UploadDrawer from './components/UploadDrawer.svelte';
   import Toast from './components/Toast.svelte';
 
@@ -31,7 +33,9 @@
       document.addEventListener('visibilitychange', handleVisibilityChange);
     }
     await Promise.all([fetchVideos(), fetchFolders(), fetchSuggestions()]);
+    await fetchAlbums();
     appState.parseCurrentUrl();
+    await appState.fetchAllAlbumMemberships();
     sseSource = initSSE();
   });
 
@@ -62,6 +66,10 @@
         </div>
       {:else if appState.currentRoute === 'player'}
         <Player />
+      {:else if appState.currentRoute === 'album'}
+        <AlbumPage />
+      {:else if appState.currentRoute === 'tag'}
+        <TagPage />
       {:else}
         <VideoGrid />
       {/if}

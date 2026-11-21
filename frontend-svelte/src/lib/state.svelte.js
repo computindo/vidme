@@ -1,4 +1,5 @@
 import { slugify } from "./utils.js";
+import { fetchAlbumVideoIds } from "./api.js";
 
 class GlobalState {
   videos = $state([]);
@@ -6,6 +7,8 @@ class GlobalState {
   currentRoute = $state("/");
   activeVideoId = $state(null);
   activeFolderId = $state(null);
+  activeAlbumId = $state(null);
+  activeTagSlug = $state(null);
   virtualView = $state(null); // "portrait", "landscape", "uncategorized"
   searchQuery = $state("");
   page = $state(1);
@@ -29,6 +32,9 @@ class GlobalState {
   albums = $state([]);
   suggestions = $state([]);
 
+  // Albums: albumId -> array of video ids (members)
+  albumMembers = $state({});
+
   // Derived: Active video object
   activeVideo = $derived(
     this.activeVideoId ? this.videos.find((v) => v.id === this.activeVideoId) || null : null
@@ -39,14 +45,32 @@ class GlobalState {
     this.activeFolderId ? this.folders.find((f) => f.id === this.activeFolderId) || null : null
   );
 
+  // Derived: Active album object
+  activeAlbum = $derived(
+    this.activeAlbumId ? this.albums.find((a) => a.id === this.activeAlbumId) || null : null
+  );
+
+  // Derived: Union of every album's member ids — excluded from browse lists
+  albumExcludedIds = $derived.by(() => {
+    const ids = new Set();
+    for (const vids of Object.values(this.albumMembers)) {
+      for (const id of vids) ids.add(id);
+    }
+    return ids;
+  });
+
+  // Base list (non-search browse): all videos minus every album member
+  baseVideos = $derived(this.videos.filter((v) => !this.albumExcludedIds.has(v.id)));
+
   // Derived: Filtered videos based on folder / virtual / search
   filteredVideos = $derived.by(() => {
-    let list = this.videos;
-
+    // Search always runs over ALL videos (no album exclusion)
     if (this.searchQuery.trim()) {
       const q = this.searchQuery.toLowerCase();
-      return list.filter((v) => v.title && v.title.toLowerCase().includes(q));
+      return this.videos.filter((v) => v.title && v.title.toLowerCase().includes(q));
     }
+
+    let list = this.baseVideos;
 
     if (this.virtualView === "portrait") {
       return list.filter((v) => v.is_portrait === 1);
@@ -65,18 +89,18 @@ class GlobalState {
     return list;
   });
 
-  // Derived: Pinned videos for home
+  // Derived: Pinned videos for home (album members excluded)
   pinnedVideos = $derived(
     !this.activeFolderId && !this.virtualView && !this.searchQuery
-      ? this.videos.filter((v) => v.is_pinned === 1)
+      ? this.videos.filter((v) => v.is_pinned === 1 && !this.albumExcludedIds.has(v.id))
       : []
   );
 
-  // Derived: Recent 10 uploads for Hero Carousel
+  // Derived: Recent 10 uploads for Hero Carousel (album members excluded)
   recentVideos = $derived(
     !this.activeFolderId && !this.virtualView && !this.searchQuery
       ? [...this.videos]
-          .filter((v) => v.status === "ready")
+          .filter((v) => v.status === "ready" && !this.albumExcludedIds.has(v.id))
           .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
           .slice(0, 10)
       : []
@@ -124,6 +148,33 @@ class GlobalState {
     this.selectedIds = [];
   }
 
+  setAlbumMembers(albumId, videoIds) {
+    this.albumMembers = { ...this.albumMembers, [albumId]: videoIds };
+  }
+
+  async fetchAllAlbumMemberships() {
+    await Promise.all(
+      this.albums.map(async (album) => {
+        try {
+          const vids = await fetchAlbumVideoIds(album.id);
+          this.setAlbumMembers(album.id, vids.map((v) => v.id));
+        } catch (err) {
+          console.error(`Failed to fetch album members for ${album.id}:`, err);
+        }
+      })
+    );
+  }
+
+  async ensureAlbumMembers(albumId) {
+    if (this.albumMembers[albumId]) return;
+    try {
+      const vids = await fetchAlbumVideoIds(albumId);
+      this.setAlbumMembers(albumId, vids.map((v) => v.id));
+    } catch (err) {
+      console.error(`Failed to fetch album members for ${albumId}:`, err);
+    }
+  }
+
   addToast(message, type = "info", duration = 3000) {
     const id = Math.random().toString(36).slice(2);
     this.toasts.push({ id, message, type });
@@ -162,6 +213,8 @@ class GlobalState {
 
     const wasPlayer = this.currentRoute === "player";
     this.activeVideoId = null;
+    this.activeAlbumId = null;
+    this.activeTagSlug = null;
     this.currentRoute = "grid";
 
     if (wasPlayer) {
@@ -171,6 +224,29 @@ class GlobalState {
           window.scrollTo(0, parseInt(saved, 10));
         });
       }
+    }
+
+    // Check album URL: /album/:slug
+    const albumMatch = path.match(/^\/album\/([\w-]+)/);
+    if (albumMatch) {
+      const found = this.albums.find((a) => slugify(a.name) === albumMatch[1]);
+      if (found) {
+        this.activeAlbumId = found.id;
+        this.currentRoute = "album";
+        this.virtualView = null;
+        this.activeFolderId = null;
+        return;
+      }
+    }
+
+    // Check tag URL: /tag/:slug
+    const tagMatch = path.match(/^\/tag\/([\w-]+)/);
+    if (tagMatch) {
+      this.activeTagSlug = tagMatch[1];
+      this.currentRoute = "tag";
+      this.virtualView = null;
+      this.activeFolderId = null;
+      return;
     }
 
     // Check library URL: /library/:view

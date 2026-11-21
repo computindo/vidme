@@ -1,11 +1,22 @@
 <script>
   import { appState } from "../lib/state.svelte.js";
   import { pinVideo, deleteVideo } from "../lib/api.js";
-  import { fmt } from "../lib/utils.js";
+  import { fmt, slugify } from "../lib/utils.js";
 
   let { video } = $props();
 
   const isSelected = $derived(appState.selectedIds.includes(video.id));
+
+  const tagChips = $derived(
+    video.tags
+      ? video.tags.split(",").map((t) => t.trim()).filter(Boolean).slice(0, 3)
+      : []
+  );
+
+  function openTag(e, tag) {
+    e.stopPropagation();
+    appState.navigate(`/tag/${slugify(tag)}`);
+  }
 
   let hoverTimer = null;
   let showVideoPreview = $state(false);
@@ -145,6 +156,20 @@
       >
         {video.title}
       </button>
+      {#if tagChips.length > 0}
+        <div class="mt-1 flex flex-wrap gap-1">
+          {#each tagChips as tag (tag)}
+            <button
+              type="button"
+              onclick={(e) => openTag(e, tag)}
+              class="rounded bg-theme-bg px-1.5 py-0.5 text-[10px] text-slate-400 transition-colors hover:text-indigo-300 cursor-pointer"
+              title="Lihat tag #{tag}"
+            >
+              #{tag}
+            </button>
+          {/each}
+        </div>
+      {/if}
       {#if video.created_at}
         <p class="mt-1 text-xs text-slate-500">
           {new Date(video.created_at).toLocaleDateString()}

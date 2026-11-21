@@ -142,6 +142,24 @@ pub async fn remove_videos_from_album(
     Ok(Json(serde_json::json!({ "success": true, "removed": removed })))
 }
 
+pub async fn list_album_videos(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let existing = albums::get_album(&state.pool, &id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    if existing.is_none() {
+        return Err((StatusCode::NOT_FOUND, "Album not found".to_string()));
+    }
+
+    let videos = albums::list_album_videos(&state.pool, &id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(videos))
+}
+
 pub async fn set_album_cover(
     State(state): State<AppState>,
     Path(id): Path<String>,

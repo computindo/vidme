@@ -47,7 +47,9 @@ pub fn create_router() -> Router<AppState> {
         )
         .route(
             "/api/albums/:id/videos",
-            post(albums::add_videos_to_album).delete(albums::remove_videos_from_album),
+            get(albums::list_album_videos)
+                .post(albums::add_videos_to_album)
+                .delete(albums::remove_videos_from_album),
         )
         .route("/api/albums/:id/cover", post(albums::set_album_cover))
         .route("/cover-image/:albumId", get(albums::get_cover_image))

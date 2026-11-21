@@ -1,8 +1,8 @@
 <script>
   import { onMount, onDestroy } from "svelte";
   import { appState } from "../lib/state.svelte.js";
-  import { updateVideoTitle } from "../lib/api.js";
-  import { fmt } from "../lib/utils.js";
+  import { updateVideoTitle, setVideoTags } from "../lib/api.js";
+  import { fmt, slugify } from "../lib/utils.js";
 
   const SKIP_S = 5;
 
@@ -30,6 +30,23 @@
 
   let isEditingTitle = $state(false);
   let editedTitle = $state("");
+
+  let tagInput = $state("");
+
+  function saveTags() {
+    if (!video) return;
+    const norm = tagInput.split(",").map((t) => t.trim()).filter(Boolean).join(",");
+    const current = (video.tags || "").split(",").map((t) => t.trim()).filter(Boolean).join(",");
+    if (norm !== current) {
+      setVideoTags(video.id, norm);
+    }
+  }
+
+  const videoTagChips = $derived(
+    video?.tags
+      ? video.tags.split(",").map((t) => t.trim()).filter(Boolean).slice(0, 5)
+      : []
+  );
 
   function togglePlay() {
     if (!videoEl) return;
@@ -213,6 +230,7 @@
   $effect(() => {
     if (video) {
       editedTitle = video.title;
+      tagInput = video.tags || "";
       if (typeof document !== "undefined" && video.title) {
         document.title = `${video.title} — VidMe`;
       }
@@ -468,6 +486,41 @@
       <span>Ukuran: {video?.size_bytes ? (video.size_bytes / 1024 / 1024).toFixed(1) + " MB" : "-"}</span>
       <span>&bull;</span>
       <span>Orientasi: {video?.is_portrait ? "Portrait" : "Landscape"}</span>
+    </div>
+
+    <!-- Tag editor -->
+    <div class="mt-4 border-t border-theme-border pt-4">
+      {#if videoTagChips.length > 0}
+        <div class="mb-2 flex flex-wrap gap-1.5">
+          {#each videoTagChips as tag (tag)}
+            <button
+              type="button"
+              onclick={() => appState.navigate(`/tag/${slugify(tag)}`)}
+              class="rounded bg-theme-bg px-2 py-0.5 text-[11px] text-slate-400 transition-colors hover:text-indigo-300 cursor-pointer"
+              title="Lihat tag #{tag}"
+            >
+              #{tag}
+            </button>
+          {/each}
+        </div>
+      {/if}
+      <div class="flex items-center gap-2">
+        <span class="material-symbols text-base text-slate-500">sell</span>
+        <input
+          type="text"
+          bind:value={tagInput}
+          placeholder="Tag dipisah koma, mis. journey,trip"
+          onkeydown={(e) => e.key === "Enter" && saveTags()}
+          class="flex-1 rounded-lg border border-theme-border bg-theme-bg px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none"
+        />
+        <button
+          type="button"
+          onclick={saveTags}
+          class="rounded-lg bg-indigo-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 cursor-pointer"
+        >
+          Simpan Tag
+        </button>
+      </div>
     </div>
   </div>
 </div>
