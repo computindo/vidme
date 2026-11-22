@@ -28,6 +28,49 @@ fn esc_xml(s: &str) -> String {
         .replace('\'', "&apos;")
 }
 
+fn hex_val(b: u8) -> Option<u8> {
+    match b {
+        b'0'..=b'9' => Some(b - b'0'),
+        b'a'..=b'f' => Some(b - b'a' + 10),
+        b'A'..=b'F' => Some(b - b'A' + 10),
+        _ => None,
+    }
+}
+
+// vidme-webdav-decode: `http::Uri::path()` keeps percent-encoding (%20 for space),
+// while the legacy Node/Express backend decoded it. Decode before any filesystem use.
+fn percent_decode(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let (Some(h), Some(l)) = (hex_val(bytes[i + 1]), hex_val(bytes[i + 2])) {
+                out.push(h * 16 + l);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+// vidme-webdav-encode: WebDAV hrefs must stay percent-encoded in PROPFIND XML.
+fn percent_encode_path(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    for &b in input.as_bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' | b'/' | b':' => {
+                out.push(b as char)
+            }
+            _ => out.push_str(&format!("%{:02X}", b)),
+        }
+    }
+    out
+}
+
 fn check_auth(headers: &HeaderMap, state: &AppState) -> bool {
     if let Some(auth) = headers.get(header::AUTHORIZATION) {
         if let Ok(auth_str) = auth.to_str() {
@@ -66,11 +109,23 @@ pub async fn webdav_handler(
     }
 
     let req_uri_path = req.uri().path().to_string();
-    let sub_path = req_uri_path
-        .strip_prefix("/webdav")
-        .unwrap_or(&req_uri_path)
-        .trim_matches('/')
-        .to_string();
+    // vidme-webdav-decode: decode %20 dsb sebelum dipakai sebagai path filesystem.
+    let sub_path = percent_decode(
+        req_uri_path
+            .strip_prefix("/webdav")
+            .unwrap_or(&req_uri_path)
+            .trim_matches('/'),
+    )
+    .trim_matches('/')
+    .to_string();
+
+    // vidme-webdav-decode: traversal guard (decode bisa memunculkan ".." dari %2E%2E)
+    if sub_path.split('/').any(|seg| seg == "..") || sub_path.contains('\0') {
+        return Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .body(Body::from("Invalid path"))
+            .unwrap();
+    }
 
     let inbox_dir = format!("{}/webdav-inbox", state.config.storage_path);
     let _ = fs::create_dir_all(&inbox_dir).await;
@@ -163,7 +218,7 @@ async fn handle_propfind(inbox_dir: &str, sub_path: &str, headers: &HeaderMap) -
     let href_base = if sub_path.is_empty() {
         "/webdav/".to_string()
     } else {
-        format!("/webdav/{}/", sub_path)
+        format!("/webdav/{}/", percent_encode_path(sub_path))
     };
 
     if meta.is_dir() {
@@ -185,7 +240,7 @@ async fn handle_propfind(inbox_dir: &str, sub_path: &str, headers: &HeaderMap) -
                         let child_href = format!(
                             "{}{}{}",
                             href_base,
-                            file_name,
+                            percent_encode_path(&file_name),
                             if is_dir { "/" } else { "" }
                         );
                         let size = if is_dir { 0 } else { child_meta.len() };
@@ -208,7 +263,7 @@ async fn handle_propfind(inbox_dir: &str, sub_path: &str, headers: &HeaderMap) -
         }
     } else {
         let file_name = target.file_name().and_then(|n| n.to_str()).unwrap_or("");
-        let href = format!("/webdav/{}", sub_path);
+        let href = format!("/webdav/{}", percent_encode_path(sub_path));
         responses.push(format!(
             "<D:response><D:href>{}</D:href><D:propstat><D:prop><D:displayname>{}</D:displayname><D:getcontentlength>{}</D:getcontentlength><D:resourcetype></D:resourcetype><D:getcontenttype>video/mp4</D:getcontenttype></D:prop><D:status>HTTP/1.1 200 OK</D:status></D:propstat></D:response>",
             esc_xml(&href),
