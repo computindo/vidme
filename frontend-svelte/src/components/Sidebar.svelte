@@ -50,8 +50,11 @@
       }}
       class="flex items-center gap-3 text-2xl font-bold tracking-tight text-white font-heading"
     >
-      <span class="material-symbols text-2xl text-indigo-400">play_circle</span>
-      <span>VidMe</span>
+      <svg class="h-7 w-7 shrink-0" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <path d="M2.45 4.5L7.55 4.5L16 22.2L24.45 4.5L29.55 4.5L18.55 27.5L13.45 27.5Z" fill="#38bdf8" stroke="#38bdf8" stroke-width="1.4" stroke-linejoin="round"/>
+        <path d="M13.08 6L13.08 12.93L19.08 9.46Z" fill="#7dd3fc"/>
+      </svg>
+      <span>Vid<span class="text-sky-400">Me</span></span>
     </a>
     <button
       id="sidebarToggleBtn"
