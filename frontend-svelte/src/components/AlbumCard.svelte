@@ -25,17 +25,23 @@
   }
 </script>
 
-<button
-  type="button"
-  onclick={open}
-  class="group flex w-full flex-col overflow-hidden rounded-xl border border-theme-border bg-theme-surface text-left transition-all hover:-translate-y-1 hover:shadow-xl hover:border-slate-700"
+<!-- vidme-album-shell: shell identik dengan VideoCard (frame aspect-[9/16], letterbox,
+     badge kiri-bawah, judul line-clamp-2) supaya album tidak belang di grid -->
+<article
+  class="group relative flex flex-col overflow-hidden rounded-xl border transition-all duration-200 hover:-translate-y-1 hover:shadow-xl border-theme-border bg-theme-surface hover:border-slate-700"
 >
-  <div class="relative w-full overflow-hidden bg-black aspect-video">
+  <div
+    role="button"
+    tabindex="0"
+    class="relative w-full cursor-pointer overflow-hidden bg-black aspect-[9/16] flex items-center justify-center"
+    onclick={open}
+    onkeydown={(e) => e.key === "Enter" && open()}
+  >
     {#if src}
       <img
         {src}
         alt={album.name}
-        class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+        class="h-full w-full object-contain transition-transform duration-300 group-hover:scale-105"
         onerror={handleError}
         loading="lazy"
       />
@@ -44,11 +50,22 @@
         <span class="material-symbols text-4xl text-slate-600">photo_library</span>
       </div>
     {/if}
-    <span class="absolute bottom-2 right-2 z-10 rounded bg-black/80 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur-sm">
+    <span
+      class="absolute bottom-2 left-2 z-10 flex items-center gap-1 rounded bg-black/80 px-2 py-0.5 text-[11px] font-semibold text-white backdrop-blur-sm"
+    >
+      <span class="material-symbols text-xs">photo_library</span>
       {album.video_count} video
     </span>
   </div>
-  <div class="p-3">
-    <p class="truncate text-sm font-semibold text-slate-100">{album.name}</p>
+
+  <div class="flex flex-1 flex-col justify-between p-3">
+    <div class="w-full min-w-0">
+      <button
+        class="text-left cursor-pointer text-sm font-semibold text-slate-100 line-clamp-2 hover:text-indigo-400 w-full break-words"
+        onclick={open}
+      >
+        {album.name}
+      </button>
+    </div>
   </div>
-</button>
+</article>

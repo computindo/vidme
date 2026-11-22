@@ -90,3 +90,21 @@ body {
   transform: rotate(250deg);
   transition-duration: 1.5s;
 }
+
+/* vidme-suggest-count: kartu ke-16 hanya tampil di HP (2 kolom) & tablet 4-kolom,
+   supaya baris suggested selalu penuh (16 = 8x2 / 4x4; 15 = 5x3 desktop & 3x5) */
+.suggested-grid > *:nth-child(16) {
+  display: none;
+}
+
+@media (max-width: 639px) {
+  .suggested-grid > *:nth-child(16) {
+    display: flex;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .suggested-grid > *:nth-child(16) {
+    display: flex;
+  }
+}
