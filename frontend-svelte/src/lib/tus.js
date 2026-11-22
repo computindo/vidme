@@ -1,4 +1,5 @@
 import { appState } from './state.svelte.js';
+import { TUS_CHUNK_SIZE_SMALL, pickChunkSize } from './chunkPolicy.js';
 
 function tsStreamTypes(bin) {
   const out = { h264: false, hevc: false, av1: false };
@@ -97,28 +98,12 @@ export async function abortTusUpload(location) {
   } catch (_) {}
 }
 
-// Adaptive TUS Chunk Size Configuration (parity with main v2.9.6)
-const TUS_CHUNK_SIZE_SMALL = 4 * 1024 * 1024; // 4MB default / fallback
-const TUS_CHUNK_SIZE_LARGE = 8 * 1024 * 1024; // 8MB high-speed
-const TUS_SPEED_UP_MBPS = 1.0;                // speed > 1.0 MB/s -> switch to 8MB
-const TUS_SPEED_DOWN_MBPS = 0.9;              // speed < 0.9 MB/s -> fall back to 4MB
-
+// vidme-tus-chunk: keputusan ukuran chunk di chunkPolicy.js (diuji check-chunk-policy.mjs).
+// Riwayat: versi lama memakai EMA 0.7/0.3 sebagai dasar keputusan -> chunk-1 selalu 4MB
+// lalu langsung sticky 8MB (gejala "aturan 4MB cuma jalan di awal"). Sekarang keputusan
+// memakai kecepatan potongan TERAKHIR; EMA tetap dihitung hanya untuk display speed/ETA.
 export async function uploadTusFile(file, folderId, onProgress, signal, customTitle = null) {
   let chunkSize = TUS_CHUNK_SIZE_SMALL;
-
-  // ANALISIS "adaptive cuma jalan di awal": (1) EMA awal 0 -> mbps<0.9 -> chunk-1 selalu 4MB;
-  // (2) EMA 0.7/0.3 konvergen lambat (link ~1.3MB/s butuh ~5 chunk sebelum EMA>1.0 -> 8MB);
-  // (3) hysteresis 1.0/0.9 memang sticky by design (anti goyang tiap chunk);
-  // (4) link publik terukur ~1.1-1.5MB/s = pas di garis threshold -> perpindahan jarang.
-  // JANGAN ubah EMA/hysteresis tanpa data: indikator chunk dulu, tuning menyusul.
-  function syncChunkSize(speed) {
-    const mbps = speed / 1048576;
-    if (mbps > TUS_SPEED_UP_MBPS) {
-      chunkSize = TUS_CHUNK_SIZE_LARGE;
-    } else if (mbps < TUS_SPEED_DOWN_MBPS) {
-      chunkSize = TUS_CHUNK_SIZE_SMALL;
-    }
-  }
   const _gate = await detectVideoCodec(file);
   if (!_gate.ok) {
     throw new Error(`Hanya video H.264 yang diperbolehkan. Codec terdeteksi: ${_gate.codec}. Silakan convert terlebih dahulu.`);
@@ -153,6 +138,7 @@ export async function uploadTusFile(file, folderId, onProgress, signal, customTi
 
   let offset = 0;
   let speedEma = 0;
+  let lastChunkSpeed = 0; // vidme-tus-chunk: keputusan chunk pakai kecepatan potongan terakhir
   let chunkIndex = 0;
 
   while (offset < file.size) {
@@ -161,7 +147,7 @@ export async function uploadTusFile(file, folderId, onProgress, signal, customTi
       throw new Error('Upload dibatalkan');
     }
 
-    syncChunkSize(speedEma);
+    chunkSize = pickChunkSize(chunkSize, lastChunkSpeed);
     const chunkEnd = Math.min(offset + chunkSize, file.size);
     const chunkBlob = file.slice(offset, chunkEnd);
     const chunkStart = Date.now();
@@ -209,6 +195,7 @@ export async function uploadTusFile(file, folderId, onProgress, signal, customTi
 
     const chunkDuration = (Date.now() - chunkStart) / 1000;
     const instantSpeed = chunkBlob.size / (chunkDuration || 0.1);
+    lastChunkSpeed = instantSpeed;
     speedEma = speedEma === 0 ? instantSpeed : 0.7 * speedEma + 0.3 * instantSpeed;
     chunkIndex++;
 
