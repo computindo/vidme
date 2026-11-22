@@ -8,7 +8,9 @@ use tokio::sync::Mutex;
 use tracing::{error, info};
 
 const ROTATION_DURATION_MS: i64 = 3 * 3600 * 1000; // 3 hours (user decision 05-11-26)
-const SUGGESTIONS_PER_TURN: usize = 15;
+// vidme-suggest-count: 16 per turn (user 22-11-26: 16 card di HP, 15 di desktop;
+// kartu ke-16 disembunyikan CSS di breakpoint desktop)
+const SUGGESTIONS_PER_TURN: usize = 16;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SuggestionsState {
@@ -219,6 +221,16 @@ impl SuggestionsManager {
             } else {
                 state = self.reset_cycle(pool, Some(state.cycle)).await?;
             }
+        }
+
+        // vidme-suggest-16: top-up instan bila current_ids kurang dari SUGGESTIONS_PER_TURN
+        // (state lama berisi 15; tanpa ini user menunggu rotasi 3 jam sebelum dapat 16)
+        if state.current_ids.len() < SUGGESTIONS_PER_TURN && !state.deck.is_empty() {
+            let need = SUGGESTIONS_PER_TURN - state.current_ids.len();
+            let take = std::cmp::min(need, state.deck.len());
+            let top: Vec<String> = state.deck.drain(0..take).collect();
+            state.current_ids.extend(top);
+            self.write_disk(&state);
         }
 
         let current_ids = state.current_ids.clone();

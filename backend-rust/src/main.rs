@@ -22,6 +22,71 @@ fn resolve_frontend_path() -> String {
     }
 }
 
+// vidme-static-root: content-type minimal untuk aset root frontend
+fn static_content_type(path: &str) -> &'static str {
+    let lower = path.to_ascii_lowercase();
+    if lower.ends_with(".svg") {
+        "image/svg+xml"
+    } else if lower.ends_with(".html") {
+        "text/html; charset=utf-8"
+    } else if lower.ends_with(".js") {
+        "text/javascript; charset=utf-8"
+    } else if lower.ends_with(".css") {
+        "text/css; charset=utf-8"
+    } else if lower.ends_with(".json") {
+        "application/json"
+    } else if lower.ends_with(".webmanifest") {
+        "application/manifest+json"
+    } else if lower.ends_with(".png") {
+        "image/png"
+    } else if lower.ends_with(".jpg") || lower.ends_with(".jpeg") {
+        "image/jpeg"
+    } else if lower.ends_with(".webp") {
+        "image/webp"
+    } else if lower.ends_with(".ico") {
+        "image/x-icon"
+    } else if lower.ends_with(".woff2") {
+        "font/woff2"
+    } else if lower.ends_with(".txt") {
+        "text/plain; charset=utf-8"
+    } else {
+        "application/octet-stream"
+    }
+}
+
+// vidme-static-root: decode percent-encoding (%20 dst) untuk lookup file statis
+fn decode_path(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let h = bytes[i + 1];
+            let l = bytes[i + 2];
+            let hv = match h {
+                b'0'..=b'9' => Some(h - b'0'),
+                b'a'..=b'f' => Some(h - b'a' + 10),
+                b'A'..=b'F' => Some(h - b'A' + 10),
+                _ => None,
+            };
+            let lv = match l {
+                b'0'..=b'9' => Some(l - b'0'),
+                b'a'..=b'f' => Some(l - b'a' + 10),
+                b'A'..=b'F' => Some(l - b'A' + 10),
+                _ => None,
+            };
+            if let (Some(hv), Some(lv)) = (hv, lv) {
+                out.push(hv * 16 + lv);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
 async fn spa_fallback(frontend_path: String, uri: Uri) -> Response {
     let req_path = uri.path();
     if req_path.starts_with("/api")
@@ -36,6 +101,28 @@ async fn spa_fallback(frontend_path: String, uri: Uri) -> Response {
             .status(StatusCode::NOT_FOUND)
             .body(Body::from("Not Found"))
             .unwrap();
+    }
+
+    // vidme-static-root: sajikan file statis root (favicon.svg, manifest.json, dst)
+    // sebelum jatuh ke index.html. Dulu hanya /assets & /js yang dilayani sehingga
+    // /favicon.svg selalu dibalikin HTML (browser menganggap favicon tidak ada).
+    let raw_rel = req_path.trim_start_matches('/');
+    let rel = decode_path(raw_rel);
+    let traversal = rel.split('/').any(|seg| seg == "..") || rel.contains('\0');
+    if !rel.is_empty() && !traversal {
+        let candidate = format!("{}/{}", frontend_path, rel);
+        if let Ok(m) = tokio::fs::metadata(&candidate).await {
+            if m.is_file() {
+                if let Ok(bytes) = tokio::fs::read(&candidate).await {
+                    let ctype = static_content_type(&rel);
+                    return Response::builder()
+                        .status(StatusCode::OK)
+                        .header(header::CONTENT_TYPE, ctype)
+                        .body(Body::from(bytes))
+                        .unwrap();
+                }
+            }
+        }
     }
 
     let index_file = format!("{}/index.html", frontend_path);
