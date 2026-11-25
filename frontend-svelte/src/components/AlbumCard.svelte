@@ -41,7 +41,7 @@
       <img
         {src}
         alt={album.name}
-        class="h-full w-full object-contain transition-transform duration-300 group-hover:scale-105"
+        class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
         onerror={handleError}
         loading="lazy"
       />
