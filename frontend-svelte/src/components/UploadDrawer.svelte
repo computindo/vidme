@@ -278,7 +278,7 @@
                     {formatBytes(item.displaySent || item.bytesSent || 0)} / {formatBytes(item.size)} &bull; {item.displayProgress || item.progress}%
                   </span>
                   <span class="text-xs text-theme-muted">
-                    {#if item.chunkSize}Chunk {(item.chunkSize / 1048576).toFixed(0)} MB &bull; {/if}{formatBytes(item.speed || 0)}/s &bull; ETA: {fmtEta(item.displayEta || item.eta)}
+                    {formatBytes(item.speed || 0)}/s &bull; ETA: {fmtEta(item.displayEta || item.eta)}
                   </span>
                 </div>
               {:else if item.status === 'staged'}
