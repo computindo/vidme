@@ -136,10 +136,25 @@ export async function uploadTusFile(file, folderId, onProgress, signal, customTi
     throw new Error('Server tidak memberikan Location header');
   }
 
+  // vidme-tus-resync (25-11-26): rewrite loop chunk — root cause "jalan 4MB lalu mati"
+  // = resync 409 lama mengganti `offset` TAPI tetap mengirim `chunkBlob` potongan LAMA
+  // → byte duplikat → desync permanen → 409 terus-menerus. Sekarang: potongan SELALU
+  // di-slice ulang dari offset terkini, watchdog per chunk, backoff retry, HEAD resync
+  // setelah network error, dan 4xx permanen (selain 429) tidak di-retry.
   let offset = 0;
   let speedEma = 0;
   let lastChunkSpeed = 0; // vidme-tus-chunk: keputusan chunk pakai kecepatan potongan terakhir
   let chunkIndex = 0;
+
+  const TUS_HEADERS = { 'Tus-Resumable': '1.0.0' };
+  const MAX_ATTEMPTS = 5;
+  const CHUNK_TIMEOUT_MS = 180000; // watchdog per chunk (3 menit)
+
+  async function syncServerOffset() {
+    const headRes = await fetch(location, { method: 'HEAD', headers: TUS_HEADERS, signal });
+    const off = parseInt(headRes.headers.get('Upload-Offset') || '0', 10);
+    return Number.isFinite(off) ? off : 0;
+  }
 
   while (offset < file.size) {
     if (signal?.aborted) {
@@ -148,71 +163,101 @@ export async function uploadTusFile(file, folderId, onProgress, signal, customTi
     }
 
     chunkSize = pickChunkSize(chunkSize, lastChunkSpeed);
-    const chunkEnd = Math.min(offset + chunkSize, file.size);
-    const chunkBlob = file.slice(offset, chunkEnd);
-    const chunkStart = Date.now();
+    let attempt = 0;
+    let landed = false;
 
-    let patchRes = null;
-    let attempts = 0;
+    while (attempt < MAX_ATTEMPTS && !landed) {
+      attempt++;
+      // potongan dihitung FRESH dari offset terkini setiap percobaan
+      const chunkEnd = Math.min(offset + chunkSize, file.size);
+      const chunkBlob = file.slice(offset, chunkEnd);
+      const chunkStart = Date.now();
 
-    while (attempts < 5) {
-      if (signal?.aborted) {
-        await abortTusUpload(location);
-        throw new Error('Upload dibatalkan');
-      }
-      attempts++;
+      // watchdog per chunk: PATCH yang nyangkut di-abort tanpa menyentuh signal user
+      const chunkCtl = new AbortController();
+      const onUserAbort = () => chunkCtl.abort();
+      signal?.addEventListener('abort', onUserAbort, { once: true });
+      const watchdog = setTimeout(() => chunkCtl.abort(), CHUNK_TIMEOUT_MS);
+
       try {
-        patchRes = await fetch(location, {
+        const patchRes = await fetch(location, {
           method: 'PATCH',
           headers: {
-            'Tus-Resumable': '1.0.0',
+            ...TUS_HEADERS,
             'Upload-Offset': String(offset),
             'Content-Type': 'application/offset+octet-stream',
           },
           body: chunkBlob,
-          signal,
+          signal: chunkCtl.signal,
         });
 
-        if (patchRes.ok) break;
-        if (patchRes.status === 409) {
-          const headRes = await fetch(location, { method: 'HEAD', headers: { 'Tus-Resumable': '1.0.0' }, signal });
-          const newOff = headRes.headers.get('Upload-Offset');
-          if (newOff) offset = parseInt(newOff, 10);
+        if (patchRes.ok) {
+          const chunkDuration = (Date.now() - chunkStart) / 1000;
+          const instantSpeed = chunkBlob.size / (chunkDuration || 0.1);
+          lastChunkSpeed = instantSpeed;
+          speedEma = speedEma === 0 ? instantSpeed : 0.7 * speedEma + 0.3 * instantSpeed;
+          chunkIndex++;
+          offset = chunkEnd;
+
+          console.debug('[tus] chunk', {
+            chunkIndex,
+            chunkSize,
+            offset,
+            instantSpeedMBps: +(instantSpeed / 1048576).toFixed(2),
+            emaMBps: +(speedEma / 1048576).toFixed(2),
+          });
+
+          const remainingBytes = file.size - offset;
+          const etaSec = speedEma > 0 ? Math.round(remainingBytes / speedEma) : 0;
+          const progress = Math.round((offset / file.size) * 100);
+
+          if (onProgress) {
+            onProgress({ progress, speed: speedEma, eta: etaSec, offset, total: file.size, chunkSize, chunkIndex });
+          }
+          landed = true;
+          break;
         }
+
+        if (patchRes.status === 409) {
+          // offset tidak cocok → resync dari server; potongan di-slice ulang di iterasi berikutnya
+          offset = await syncServerOffset();
+          continue;
+        }
+
+        // 4xx permanen (selain 429) tidak di-retry — sesuai perilaku Node lama
+        if (patchRes.status >= 400 && patchRes.status < 500 && patchRes.status !== 429) {
+          throw new Error(`Upload ditolak server (HTTP ${patchRes.status})`);
+        }
+        // 5xx / 429 → jatuh ke backoff + retry di bawah
       } catch (err) {
         if (signal?.aborted) {
           await abortTusUpload(location);
           throw new Error('Upload dibatalkan');
         }
-        if (attempts >= 5) throw err;
+        if (err && err.message && err.message.startsWith('Upload ditolak server')) {
+          throw err;
+        }
+        // network error / watchdog: resync offset dari server sebelum retry
+        try {
+          offset = await syncServerOffset();
+        } catch (_) {
+          /* HEAD gagal → pakai offset lokal */
+        }
+        if (attempt >= MAX_ATTEMPTS) {
+          throw new Error(`Upload terputus pada offset ${offset} setelah ${MAX_ATTEMPTS}x percobaan: ${err.message}`);
+        }
+      } finally {
+        clearTimeout(watchdog);
+        signal?.removeEventListener('abort', onUserAbort);
       }
-      await new Promise((r) => setTimeout(r, Math.pow(2, attempts) * 500));
+
+      if (!landed) {
+        await new Promise((r) => setTimeout(r, Math.pow(2, attempt) * 500));
+      }
     }
 
-    if (!patchRes || !patchRes.ok) {
+    if (!landed) {
       throw new Error(`Upload terputus pada offset ${offset}`);
-    }
-
-    const chunkDuration = (Date.now() - chunkStart) / 1000;
-    const instantSpeed = chunkBlob.size / (chunkDuration || 0.1);
-    lastChunkSpeed = instantSpeed;
-    speedEma = speedEma === 0 ? instantSpeed : 0.7 * speedEma + 0.3 * instantSpeed;
-    chunkIndex++;
-
-    console.debug('[tus] chunk', {
-      chunkIndex,
-      chunkSize,
-      instantSpeedMBps: +(instantSpeed / 1048576).toFixed(2),
-      emaMBps: +(speedEma / 1048576).toFixed(2),
-    });
-
-    offset = chunkEnd;
-    const remainingBytes = file.size - offset;
-    const etaSec = speedEma > 0 ? Math.round(remainingBytes / speedEma) : 0;
-    const progress = Math.round((offset / file.size) * 100);
-
-    if (onProgress) {
-      onProgress({ progress, speed: speedEma, eta: etaSec, offset, total: file.size, chunkSize, chunkIndex });
     }
   }
 
