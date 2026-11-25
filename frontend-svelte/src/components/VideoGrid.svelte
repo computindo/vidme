@@ -87,13 +87,9 @@
 
 <div class="mx-auto w-full max-w-7xl px-4 py-6 md:px-8">
   {#if isHomeLanding}
-    <!-- vidme-home-header: judul kiri + logo, total video kanan (tanpa chip portrait/landscape) -->
+    <!-- vidme-home-header: judul kiri, total video kanan (TANPA logo — spec user 25-11-26) -->
     <div class="mb-8 flex items-center justify-between gap-4">
-      <h1 class="flex min-w-0 items-center gap-2.5 text-xl font-bold text-white md:text-2xl">
-        <svg class="h-7 w-7 shrink-0" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-          <path d="M2.45 4.5L7.55 4.5L16 22.2L24.45 4.5L29.55 4.5L18.55 27.5L13.45 27.5Z" fill="#38bdf8" stroke="#38bdf8" stroke-width="1.4" stroke-linejoin="round"></path>
-          <path d="M13.08 6L13.08 12.93L19.08 9.46Z" fill="#7dd3fc"></path>
-        </svg>
+      <h1 class="flex min-w-0 items-center text-xl font-bold text-white md:text-2xl">
         <span class="truncate">Your Video Collections</span>
       </h1>
       <span class="shrink-0 text-sm font-medium text-theme-muted">
